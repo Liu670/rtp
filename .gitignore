@@ -1,0 +1,16 @@
+# 编译产物
+rtps
+rtps-*
+rtpc
+rtpc.exe
+rtpc-*
+*.exe
+
+# 运行时生成的配置与日志（含令牌，切勿提交）
+config.json
+rtp.json
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
