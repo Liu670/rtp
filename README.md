@@ -116,7 +116,9 @@ GOOS=darwin  GOARCH=amd64 go build -o rtpc-darwin ./cmd/rtpc
 GOOS=linux   GOARCH=amd64 go build -o rtps-linux   ./cmd/rtps
 ```
 
-要求 Go 1.21+，无任何第三方依赖。图标资源 `cmd/rtps/rtps.syso`、`cmd/rtpc/rtpc.syso` 已随仓库提交，`go build` 会自动嵌入 exe，无需 windres；如需改图标，用 `python3 android/tools/make_icons.py` 重生成 PNG/ICO，再 `bash tools/make_syso.sh`（需 mingw-w64）。
+要求 Go 1.21+，无任何第三方依赖。图标资源 `cmd/rtps/rtps_amd64.syso`、`cmd/rtpc/rtpc_amd64.syso` 已随仓库提交，`GOOS=windows GOARCH=amd64 go build` 会自动嵌入 exe，无需 windres；如需改图标，用 `python3 android/tools/make_icons.py` 重生成 PNG/ICO，再 `bash tools/make_syso.sh`（需 mingw-w64）。
+
+> 文件名必须带 `_amd64` 架构后缀：COFF 资源对象的重定位类型与架构相关，不加后缀会让 `GOARCH=arm64` 的交叉编译报 `unknown ARM64 relocation type 3` 而失败。
 
 ### 2. 启动服务端
 
@@ -218,14 +220,14 @@ rtp/
 │   │   ├── logo.go      # 内嵌 logo.svg / favicon.ico
 │   │   ├── gui_windows.go      # Windows 服务端图形界面
 │   │   ├── gui_stub_other.go   # 非 Windows 占位
-│   │   └── rtps.syso   # Windows 资源（ICON + VERSIONINFO），提交后自动嵌入 exe
+│   │   └── rtps_amd64.syso  # Windows 资源（ICON + VERSIONINFO），提交后自动嵌入 exe
 │   └── rtpc/            # 客户端入口（main.go + 客户端实现）
 │       ├── main.go      # 启动参数、GUI/CLI 模式选择
 │       ├── client.go    # 控制连接、隧道中继、UDP 转发、Stop()、流量回调
 │       ├── p2pclient.go # 客户端 P2P（UDP 打洞、RUDP 可靠流、访问端监听）
 │       ├── gui_windows.go      # Windows 客户端图形界面
 │       ├── gui_stub_other.go   # 非 Windows 占位
-│       └── rtpc.syso   # Windows 资源（ICON）
+│       └── rtpc_amd64.syso  # Windows 资源（ICON + VERSIONINFO）
 ├── internal/
 │   ├── core/            # 服务端/客户端共享：行协议、结构定义、限速、流量时序、事件日志
 │   └── winui/           # 极简 Win32 GUI 工具库（纯 syscall，零第三方依赖）
