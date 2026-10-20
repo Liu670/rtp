@@ -76,17 +76,20 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 type clientView struct {
 	ClientConfig
-	Online   bool  `json:"online"`
+	Online     bool   `json:"online"`
 	RemoteAddr string `json:"remote_addr"`
-	Up, Down int64 `json:"up"`
-	UpRate, DownRate int64 `json:"up_rate"`
-	Conns    int   `json:"conns"`
+	Up         int64  `json:"up"`
+	Down       int64  `json:"down"`
+	UpRate     int64  `json:"up_rate"`
+	DownRate   int64  `json:"down_rate"`
+	Conns      int    `json:"conns"`
 }
 
 type tunnelView struct {
 	TunnelConfig
 	ClientName string `json:"client_name"`
-	Up, Down   int64  `json:"up"`
+	Up         int64  `json:"up"`
+	Down       int64  `json:"down"`
 	Online     bool   `json:"online"`
 }
 
