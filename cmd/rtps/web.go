@@ -800,10 +800,11 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.URL.Query().Get("name")
 	allowed := map[string]bool{
-		"rtpc":       true,
-		"rtpc.exe":   true,
-		"rtpc-linux": true,
-		"rtpc-darwin": true,
+		"rtpc":               true,
+		"rtpc.exe":           true,
+		"rtpc-linux":         true,
+		"rtpc-darwin":        true,
+		"rtpc-android-arm64": true,
 	}
 	if !allowed[name] {
 		http.Error(w, "not found", http.StatusNotFound)

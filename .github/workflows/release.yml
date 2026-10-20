@@ -34,6 +34,8 @@ jobs:
           GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-windows-arm64.exe  ./cmd/rtpc
           GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-darwin-amd64       ./cmd/rtpc
           GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-darwin-arm64       ./cmd/rtpc
+          # 客户端 · 手机端（Android / Termux，纯 Go 零依赖交叉编译）
+          GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-android-arm64 ./cmd/rtpc
           # 校验文件
           ls -la dist/
 
