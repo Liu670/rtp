@@ -13,8 +13,8 @@
 ## ✨ 特性
 
 ### 核心能力
-- **三种配置形态，同一套能力**：Windows 桌面**图形程序**（双击即用，无需命令行）、浏览器 **Web 控制台**（Windows / Linux / macOS 通用）、**Android 原生图形版 APK**。服务端与客户端均支持，且 GUI 与 Web 操作的是同一套 HTTP API，功能完全一致。
-- **Web 控制台**：图形化完成客户端管理 / 隧道增删改 / 流量统计 / 限速 / 事件日志 / 客户端与服务端下载，**不需要手写任何配置文件**。
+- **三种配置形态，同一套能力**：Windows **桌面程序**（双击即用，无需命令行）、浏览器 **Web 控制台**（Windows / Linux / macOS 通用）、**Android 原生桌面版 APK**。服务端与客户端均支持，且 GUI 与 Web 操作的是同一套 HTTP API，功能完全一致。
+- **Web 控制台**：可视化完成客户端管理 / 隧道增删改 / 流量统计 / 限速 / 事件日志 / 客户端与服务端下载，**不需要手写任何配置文件**。
 - **客户端零配置**：连接后服务端通过控制连接**热推送**隧道规则，增删改隧道不用重启客户端。
 - **多客户端模型**：每个客户端独立 token、独立隧道归属、独立在线状态与限速。
 - **5 种隧道协议**：TCP、UDP、HTTP（域名/子域名虚拟主机）、HTTPS（SNI 透传）、STCP（密钥访问）。
@@ -29,7 +29,7 @@
 - **现代化 UI**：玻璃拟态 / 渐变 / 暗·亮主题 / 5 套配色，命令面板（Ctrl+K）、数字键快捷键、搜索过滤、全站元素可点击跳转。
 - **账号密码 + 令牌双鉴权**：sha256 加盐哈希 + HttpOnly 会话 cookie（7 天）；也支持令牌直达。
 - **内置工具箱**：服务端连通性测试（TCP 探测 + 延迟）、配置备份/恢复（JSON 导入导出）、部署命令生成器（Linux/Windows/macOS/systemd 常驻，自动带令牌）。
-- **一键下载客户端与服务端**：控制台「设置」页直接下载 Windows 图形版 / 命令行版、Linux、macOS 客户端，Windows / Linux / macOS 服务端；Android 提供**原生图形版 APK**（下载即装、界面配置，扫文档内二维码直装）与 Termux 命令行版。
+- **一键下载客户端与服务端**：控制台「设置」页直接下载 Windows 桌面版 / 命令行版、Linux、macOS 客户端，Windows / Linux / macOS 服务端；Android 提供**原生桌面版 APK**（下载即装、界面配置，扫文档内二维码直装）与 Termux 命令行版。
 - **公告栏**：登录页与控制台顶部展示自定义公告。
 - **Webhook 通知**：支持飞书 / 企业微信 / 钉钉群机器人推送，9 种事件类型（客户端上下线、隧道增删改、P2P 穿透、管理操作）按需订阅，一键发送测试消息。
 
@@ -37,16 +37,16 @@
 
 | 场景 | 推荐方式 | 说明 |
 |---|---|---|
-| **Windows 服务端** | 🪟 桌面图形版 `rtps-windows-amd64.exe` | 双击即弹图形窗口：填端口 / 令牌 → 「启动服务」→ 一键打开 Web 控制台；最小化到托盘常驻 |
+| **Windows 服务端** | 🪟 桌面版 `rtps-windows-amd64.exe` | 双击即弹桌面窗口：填端口 / 令牌 → 「启动服务」→ 一键打开 Web 控制台；最小化到托盘常驻 |
 | **Linux 服务端（无桌面）** | 🌐 **只用 Web 控制台** | 命令行启动一次，浏览器里完成全部配置（功能与桌面版 100% 一致） |
-| **Linux / macOS 服务端** | 🌐 Web 控制台 | 同上，无桌面环境不需要装任何图形库 |
-| **Windows 客户端** | 🪟 桌面图形版 `rtpc-windows-amd64.exe` | 双击填「服务端地址 / 令牌 / 名称」→ 连接；支持托盘常驻 + 开机自启开关 |
-| **Android 客户端** | 📲 原生图形版 APK | 扫码或直接下载安装，打开填三项配置即可连 |
+| **Linux / macOS 服务端** | 🌐 Web 控制台 | 同上，无桌面环境不需要装任何 GUI 库 |
+| **Windows 客户端** | 🪟 桌面版 `rtpc-windows-amd64.exe` | 双击填「服务端地址 / 令牌 / 名称」→ 连接；支持托盘常驻 + 开机自启开关 |
+| **Android 客户端** | 📲 原生桌面版 APK | 扫码或直接下载安装，打开填三项配置即可连 |
 | **Linux / macOS 客户端** | ⌨️ 命令行版 | 无桌面环境，命令行 + 后台常驻（systemd / launchd） |
 
-> **设计要点**：图形界面只负责「改配置 + 启停 + 跳转 Web」，真正的隧道管理、客户端管理、统计、通知全都在 Web 控制台里，两条路径共用同一套 API，**不会出现「图形界面能配、Web 配不了」的情况**。详见[使用文档 4.6 / 4.7 节](./使用文档.md)。
+> **设计要点**：桌面界面只负责「改配置 + 启停 + 跳转 Web」，真正的隧道管理、客户端管理、统计、通知全都在 Web 控制台里，两条路径共用同一套 API，**不会出现「桌面界面能配、Web 配不了」的情况**。详见[使用文档 4.6 / 4.7 节](./使用文档.md)。
 >
-> 命令行版与图形版是同一份代码的两种编译形态：`-cli` 走命令行（保留控制台输出），无参数双击走图形界面。
+> 命令行版与桌面版是同一份代码的两种编译形态：`-cli` 走命令行（保留控制台输出），无参数双击走桌面界面。
 
 ## 📸 控制台预览
 
@@ -85,11 +85,11 @@
 
 ## 🚀 快速开始
 
-> 三种形态（Windows 图形版 / 命令行版 / Android APK）任选其一，配置能力完全等价。下面先给最简路径，完整对照见[使用文档 4.6 / 4.7 节](./使用文档.md)。
+> 三种形态（Windows 桌面版 / 命令行版 / Android APK）任选其一，配置能力完全等价。下面先给最简路径，完整对照见[使用文档 4.6 / 4.7 节](./使用文档.md)。
 
 ### 0. 先下载（不想编译就用现成的）
 
-- **Windows**：到 [Releases](../../releases) 下载 `rtps-windows-amd64.exe`（服务端图形版）与 `rtpc-windows-amd64.exe`（客户端图形版），**双击即用，无需任何命令行**；把四个二进制放在同一目录。
+- **Windows**：到 [Releases](../../releases) 下载 `rtps-windows-amd64.exe`（服务端桌面版）与 `rtpc-windows-amd64.exe`（客户端桌面版），**双击即用，无需任何命令行**；把四个二进制放在同一目录。
 - **Linux / macOS**：下载 `rtps-linux-amd64` / `rtpc-linux-amd64`，`chmod +x` 后按下方命令行步骤运行，用 Web 控制台配置。
 - **Android**：下载 `rtp-android.apk` 安装，或扫[使用文档](使用文档.md)里的二维码。
 
@@ -105,7 +105,7 @@ go build -o rtps ./cmd/rtps
 # 客户端（当前平台）
 go build -o rtpc ./cmd/rtpc
 
-# Windows 图形版（-H windowsgui：双击无黑窗）
+# Windows 桌面版（-H windowsgui：双击无黑窗）
 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui" -o rtps-windows-amd64.exe ./cmd/rtps
 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui" -o rtpc-windows-amd64.exe ./cmd/rtpc
 # Windows 命令行版（保留控制台输出）
@@ -122,9 +122,9 @@ GOOS=linux   GOARCH=amd64 go build -o rtps-linux   ./cmd/rtps
 
 ### 2. 启动服务端
 
-**方式 A · Windows 桌面图形版（推荐）**
+**方式 A · Windows 桌面版（推荐）**
 
-双击 `rtps-windows-amd64.exe` → 弹出图形窗口：
+双击 `rtps-windows-amd64.exe` → 弹出桌面窗口：
 
 1. 填写 Web 端口（默认 8080）、控制端口（7000）、工作端口（7001）、管理员令牌；
 2. 点「**保存配置**」写入 `config.json`；
@@ -132,7 +132,7 @@ GOOS=linux   GOARCH=amd64 go build -o rtps-linux   ./cmd/rtps
 4. 点「**🌐 打开 Web 控制台**」跳浏览器完成后续全部配置；
 5. 点窗口右上角关闭按钮会**最小化到托盘**常驻，托盘菜单可「打开主窗口 / 打开 Web 控制台 / 退出」。
 
-**方式 B · Linux / macOS（无图形桌面，推荐只用 Web）**
+**方式 B · Linux / macOS（无桌面环境，推荐只用 Web）**
 
 ```bash
 ./rtps -config /etc/rtp.json
@@ -140,7 +140,7 @@ GOOS=linux   GOARCH=amd64 go build -o rtps-linux   ./cmd/rtps
 ./rtps
 ```
 
-启动后浏览器打开 `http://<服务器IP>:8080/`，**所有配置都在网页里完成**，功能与桌面图形版完全一致。
+启动后浏览器打开 `http://<服务器IP>:8080/`，**所有配置都在网页里完成**，功能与桌面版完全一致。
 
 > 放行防火墙：`7000/tcp`（控制）、`7001/tcp`（工作）、`8080/tcp`（Web）、`7002/udp`（P2P 信令），以及隧道公网端口。
 
@@ -155,7 +155,7 @@ GOOS=linux   GOARCH=amd64 go build -o rtps-linux   ./cmd/rtps
 
 ### 4. 内网机器运行客户端
 
-**方式 A · Windows / Android 图形界面**
+**方式 A · Windows / Android 桌面界面**
 
 - Windows：双击 `rtpc-windows-amd64.exe`，填「服务端地址 `IP:7000`」「客户端令牌」「本机名称」→ 点「连接」。想开机自动运行，点「**开机自启**」按钮即可（会在启动文件夹创建快捷方式）。
 - Android：安装 `rtp-android.apk`，打开填同样三项 → 连接。
@@ -200,9 +200,9 @@ rtpc -server <服务器IP>:7000 -token <客户端token> -name home-pc
 }
 ```
 
-服务端启动参数：`-config`（配置路径，默认 `config.json`）、`-control/-work/-web`（端口覆盖）、`-token`（管理令牌覆盖）、`-cli`（强制命令行模式，Windows 下默认走图形界面）。账号密码哈希由服务端自动管理并在界面修改。全部字段说明见[使用文档](./使用文档.md)。
+服务端启动参数：`-config`（配置路径，默认 `config.json`）、`-control/-work/-web`（端口覆盖）、`-token`（管理令牌覆盖）、`-cli`（强制命令行模式，Windows 下默认走桌面界面）。账号密码哈希由服务端自动管理并在界面修改。全部字段说明见[使用文档](./使用文档.md)。
 
-客户端启动参数：`-server`（服务端 `IP:端口`）、`-token`（客户端令牌）、`-name`（本机名称）、`-config`（本地配置文件）、`-cli`（强制命令行模式）。Windows 下**不带 `-token` 直接双击**会打开图形界面；带 `-token` 则直接连接。
+客户端启动参数：`-server`（服务端 `IP:端口`）、`-token`（客户端令牌）、`-name`（本机名称）、`-config`（本地配置文件）、`-cli`（强制命令行模式）。Windows 下**不带 `-token` 直接双击**会打开桌面界面；带 `-token` 则直接连接。
 
 ## 📁 目录结构
 
@@ -218,20 +218,20 @@ rtp/
 │   │   ├── webhook.go   # 飞书 / 企业微信 / 钉钉 / generic Webhook 推送
 │   │   ├── p2p.go       # 服务端 P2P 协调器（信令/打洞/relay 回退）
 │   │   ├── logo.go      # 内嵌 logo.svg / favicon.ico
-│   │   ├── gui_windows.go      # Windows 服务端图形界面
+│   │   ├── gui_windows.go      # Windows 服务端桌面界面
 │   │   ├── gui_stub_other.go   # 非 Windows 占位
 │   │   └── rtps_amd64.syso  # Windows 资源（ICON + VERSIONINFO），提交后自动嵌入 exe
 │   └── rtpc/            # 客户端入口（main.go + 客户端实现）
 │       ├── main.go      # 启动参数、GUI/CLI 模式选择
 │       ├── client.go    # 控制连接、隧道中继、UDP 转发、Stop()、流量回调
 │       ├── p2pclient.go # 客户端 P2P（UDP 打洞、RUDP 可靠流、访问端监听）
-│       ├── gui_windows.go      # Windows 客户端图形界面
+│       ├── gui_windows.go      # Windows 客户端桌面界面
 │       ├── gui_stub_other.go   # 非 Windows 占位
 │       └── rtpc_amd64.syso  # Windows 资源（ICON + VERSIONINFO）
 ├── internal/
 │   ├── core/            # 服务端/客户端共享：行协议、结构定义、限速、流量时序、事件日志
 │   └── winui/           # 极简 Win32 GUI 工具库（纯 syscall，零第三方依赖）
-├── android/             # Android 原生图形版客户端（Java，无 Gradle）
+├── android/             # Android 原生桌面版客户端（Java，无 Gradle）
 │   ├── app/src/com/rtp/app/
 │   ├── build-apk.sh     # aapt2 + d8 + apksigner 打包
 │   └── tools/make_icons.py  # 生成 3 套应用图标（服务端/客户端/品牌）

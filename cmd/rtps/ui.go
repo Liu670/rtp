@@ -700,10 +700,10 @@ function openCmdModal(id){
   openModal('连接客户端 · '+c.name,
     '<div class="form-row"><label>① 下载客户端（「设置」页也有下载区）</label>'
     +'<div class="pre"><button class="btn sm cp" onclick="copyText(\''+esc(dlGui)+'\',\'已复制\')">复制</button>'
-    +'Windows 图形版（推荐）：'+esc(dlGui)+'</div>'
+    +'Windows 桌面版（推荐）：'+esc(dlGui)+'</div>'
     +'<div class="pre"><button class="btn sm cp" onclick="copyText(\''+esc(dlCli)+'\',\'已复制\')">复制</button>'
     +'Windows 命令行版：'+esc(dlCli)+'</div></div>'
-    +'<div class="form-row"><label>② 双击图形版，填入以下信息后点「连接」</label>'
+    +'<div class="form-row"><label>② 双击桌面版，填入以下信息后点「连接」</label>'
     +'<div class="kv"><span class="k">服务端地址</span><span class="v mono">'+esc(publicHost()+':'+_p[1])+'</span></div>'
     +'<div class="kv"><span class="k">客户端令牌</span><span class="v mono">'+esc(c.token)+'</span></div>'
     +'<div class="kv"><span class="k">本机名称</span><span class="v mono">'+esc(c.name)+'</span></div></div>'
@@ -969,7 +969,7 @@ function deployCmd(){
   var srv=publicHost()+':'+_p[1];
   var m={
     linux:'# 1) 下载客户端\ncurl -O "'+dl+'rtpc-linux"\nchmod +x rtpc-linux\n\n# 2) 运行（前台，Ctrl+C 退出）\n./rtpc-linux -server '+srv+' -token '+c.token+' -name '+c.name,
-    win:'# 方式一：图形界面（推荐，无需命令行）\n# 下载 Windows 图形版，双击运行，填入「服务端地址 / 客户端令牌 / 名称」后点「连接」\ncurl.exe -O "'+dl+'rtpc-windows-amd64.exe"\n\n# 方式二：命令行版（保留控制台输出，适合调试）\ncurl.exe -O "'+dl+'rtpc-windows-cli-amd64.exe"\n.\\rtpc-windows-cli-amd64.exe -cli -server '+srv+' -token '+c.token+' -name '+c.name,
+    win:'# 方式一：桌面界面（推荐，无需命令行）\n# 下载 Windows 桌面版，双击运行，填入「服务端地址 / 客户端令牌 / 名称」后点「连接」\ncurl.exe -O "'+dl+'rtpc-windows-amd64.exe"\n\n# 方式二：命令行版（保留控制台输出，适合调试）\ncurl.exe -O "'+dl+'rtpc-windows-cli-amd64.exe"\n.\\rtpc-windows-cli-amd64.exe -cli -server '+srv+' -token '+c.token+' -name '+c.name,
     mac:'curl -O "'+dl+'rtpc-darwin"\nchmod +x rtpc-darwin\n\n./rtpc-darwin -server '+srv+' -token '+c.token+' -name '+c.name,
     systemd:'# 下载并安装\ncurl -o /usr/local/bin/rtpc "'+dl+'rtpc-linux"\nchmod +x /usr/local/bin/rtpc\n\n# 写入服务\ncat > /etc/systemd/system/rtpc.service <<EOF\n[Unit]\nDescription=rtp client\nAfter=network.target\n\n[Service]\nExecStart=/usr/local/bin/rtpc -server '+srv+' -token '+c.token+' -name '+c.name+' -config /etc/rtpc.json\nRestart=always\n\n[Install]\nWantedBy=multi-user.target\nEOF\n\nsystemctl enable --now rtpc'
   };
@@ -1080,9 +1080,9 @@ function viewSettings(){
     +'<div class="hint" style="margin-top:8px">令牌用于 ?token= 直达链接与 default 客户端连接；更换后旧令牌链接立即失效，账号密码登录的会话不受影响。</div></div>'
     +'<div class="grid-2">'
     +'<div class="card glass"><div class="card-head">⬇️ 客户端下载（rtpc）</div>'
-    +'<div class="hint" style="margin-bottom:8px"><b>🪟 Windows 图形版</b>（推荐，双击即用）</div>'
+    +'<div class="hint" style="margin-bottom:8px"><b>🪟 Windows 桌面版</b>（推荐，双击即用）</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-    +'<a class="btn primary" href="/api/download?name=rtpc-windows-amd64.exe'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🪟 图形界面版</a>'
+    +'<a class="btn primary" href="/api/download?name=rtpc-windows-amd64.exe'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🪟 桌面版</a>'
     +'<a class="btn" href="/api/download?name=rtpc-windows-cli-amd64.exe'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🪟 命令行版</a>'
     +'</div>'
     +'<div class="hint" style="margin:12px 0 8px"><b>其他平台</b></div>'
@@ -1092,15 +1092,15 @@ function viewSettings(){
     +'<a class="btn primary" href="/api/download?name=rtp-android.apk'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">📲 Android APK</a>'
     +'<a class="btn" href="/api/download?name=rtpc-android-arm64'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">📱 Termux 版</a>'
     +'</div>'
-    +'<div class="hint" style="margin-top:10px">单文件、零依赖、带应用图标。<b>Windows 图形版</b>与 <b>Android APK</b> 无需任何命令行：双击 / 安装后填写服务端地址与令牌即可；Linux、macOS 无桌面环境时用命令行版 + 本Web 控制台配置（见使用文档 4.6 / 4.7 节）。</div></div>'
+    +'<div class="hint" style="margin-top:10px">单文件、零依赖、带应用图标。<b>Windows 桌面版</b>与 <b>Android APK</b> 无需任何命令行：双击 / 安装后填写服务端地址与令牌即可；Linux、macOS 无桌面环境时用命令行版 + 本Web 控制台配置（见使用文档 4.6 / 4.7 节）。</div></div>'
     +'<div class="card glass"><div class="card-head">🖥️ 服务端下载（rtps）</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-    +'<a class="btn primary" href="/api/download?name=rtps-windows-amd64.exe'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🪟 Windows 图形版</a>'
+    +'<a class="btn primary" href="/api/download?name=rtps-windows-amd64.exe'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🪟 Windows 桌面版</a>'
     +'<a class="btn" href="/api/download?name=rtps-windows-cli-amd64.exe'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🪟 Windows 命令行版</a>'
     +'<a class="btn" href="/api/download?name=rtps-linux'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🐧 Linux</a>'
     +'<a class="btn" href="/api/download?name=rtps-darwin'+(lsToken()?'&token='+encodeURIComponent(lsToken()):'')+'">🍎 macOS</a>'
     +'</div>'
-    +'<div class="hint" style="margin-top:10px">服务端也可不在本机运行——本页面即服务端 Web 控制台，<b>Linux 无图形桌面时推荐只用 Web 方式</b>（命令行启动 + 浏览器配置，功能与桌面图形版一致）。Windows 桌面版提供可视化配置、启动/停止与一键打开本控制台。</div></div>'
+    +'<div class="hint" style="margin-top:10px">服务端也可不在本机运行——本页面即服务端 Web 控制台，<b>Linux 无桌面环境时推荐只用 Web 方式</b>（命令行启动 + 浏览器配置，功能与桌面版一致）。Windows 桌面版提供可视化配置、启动/停止与一键打开本控制台。</div></div>'
     +'</div>'
     +'<div class="grid-2">'
     +'<div class="card glass"><div class="card-head">ℹ️ 关于</div>'

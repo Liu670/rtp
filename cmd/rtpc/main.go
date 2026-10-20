@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// guiAvailable 报告当前平台是否提供图形界面（仅 Windows）。
+// guiAvailable 报告当前平台是否提供桌面界面（仅 Windows）。
 var guiAvailable bool
 
 func main() {
@@ -15,11 +15,11 @@ func main() {
 		server  = flag.String("server", "", "服务端地址 host[:port]，端口缺省 7000")
 		token   = flag.String("token", "", "客户端令牌（服务端控制台「客户端」页复制）")
 		name    = flag.String("name", "windows-pc", "客户端名称")
-		cliMode = flag.Bool("cli", false, "命令行模式（不启动图形界面）")
+		cliMode = flag.Bool("cli", false, "命令行模式（不启动桌面界面）")
 	)
 	flag.Parse()
 
-	// Windows 下未传参数时启动图形界面；传了 -server/-token 或 -cli 则走命令行。
+	// Windows 下未传参数时启动桌面界面；传了 -server/-token 或 -cli 则走命令行。
 	if guiAvailable && !*cliMode && *token == "" {
 		runGUI()
 		return

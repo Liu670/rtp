@@ -26,7 +26,7 @@ jobs:
           # 说明：cmd/rtps/rtps.syso、cmd/rtpc/rtpc.syso 已随仓库提交，go build 会自动
           # 将其中的 ICON + VERSIONINFO 资源嵌入 exe（无需 windres）。
           # Windows 产出两个变体：
-          #   *-windows-*.exe         图形界面版（-H windowsgui，双击无黑窗）
+          #   *-windows-*.exe         桌面版（-H windowsgui，双击无黑窗）
           #   *-windows-cli-*.exe     命令行版（保留控制台输出，适合调试 / 无桌面）
           # 服务端
           GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtps-linux-amd64        ./cmd/rtps
