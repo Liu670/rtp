@@ -15,6 +15,9 @@ import (
 func (s *Server) StartWeb(addr string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
+	// 品牌 Logo（公开，登录页也需要）
+	mux.HandleFunc("/logo.svg", s.handleLogo)
+	mux.HandleFunc("/favicon.ico", s.handleLogo)
 	mux.HandleFunc("/api/overview", s.handleOverview)
 	mux.HandleFunc("/api/clients", s.handleClients)
 	mux.HandleFunc("/api/tunnels", s.handleTunnels)
@@ -800,10 +803,11 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.URL.Query().Get("name")
 	allowed := map[string]bool{
-		"rtpc":       true,
-		"rtpc.exe":   true,
-		"rtpc-linux": true,
-		"rtpc-darwin": true,
+		"rtpc":               true,
+		"rtpc.exe":           true,
+		"rtpc-linux":         true,
+		"rtpc-darwin":        true,
+		"rtpc-android-arm64": true,
 	}
 	if !allowed[name] {
 		http.Error(w, "not found", http.StatusNotFound)
