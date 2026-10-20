@@ -105,7 +105,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Name: sessionCookie, Value: sid, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: sessionMaxAge,
 	})
-	core.LogEvent("ok", fmt.Sprintf("管理后台登录: %s (%s)", user, r.RemoteAddr))
+	core.LogEvent("admin", "ok", fmt.Sprintf("管理后台登录: %s (%s)", user, r.RemoteAddr))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": user})
 }
 
@@ -306,7 +306,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.saveConfig()
-	core.LogEvent("ok", fmt.Sprintf("配置已恢复: %d 客户端 / %d 隧道", len(nc.Clients), len(nc.Tunnels)))
+	core.LogEvent("admin", "ok", fmt.Sprintf("配置已恢复: %d 客户端 / %d 隧道", len(nc.Clients), len(nc.Tunnels)))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "clients": len(nc.Clients), "tunnels": len(nc.Tunnels),
 		"failed": failed, "restart_required": restartRequired,

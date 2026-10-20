@@ -37,6 +37,8 @@ func (s *Server) StartWeb(addr string) {
 	// 带 ID 的子路由
 	mux.HandleFunc("/api/clients/", s.handleClientOne)
 	mux.HandleFunc("/api/tunnels/", s.handleTunnelOne)
+	mux.HandleFunc("/api/webhooks/", s.handleWebhookOne)
+	mux.HandleFunc("/api/webhooks", s.handleWebhooks)
 	log.Printf("[web] 控制台 http://0.0.0.0%s", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("[web] 启动失败: %v", err)
@@ -225,7 +227,7 @@ func (s *Server) handleClients(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Clients = append(s.cfg.Clients, in)
 		s.controlsMu.Unlock()
 		s.saveConfig()
-		core.LogEvent("ok", "创建客户端: "+in.Name)
+		core.LogEvent("client_create", "ok", "创建客户端: "+in.Name)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(in)
 	default:
@@ -329,7 +331,7 @@ func (s *Server) handleClientOne(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if tokenChanged {
-			core.LogEvent("warn", "客户端令牌已修改: "+cname+"（旧令牌将在其重连后失效）")
+			core.LogEvent("client_update", "warn", "客户端令牌已修改: "+cname+"（旧令牌将在其重连后失效）")
 		}
 		s.saveConfig()
 		s.controlsMu.Lock()
@@ -582,7 +584,7 @@ func (s *Server) handleTunnelOne(w http.ResponseWriter, r *http.Request) {
 		}
 		s.rebuildRoutes()
 		s.saveConfig()
-		core.LogEvent("ok", fmt.Sprintf("隧道已更新: %s (%s)", cur.Name, cur.Proto))
+		core.LogEvent("tunnel_update", "ok", fmt.Sprintf("隧道已更新: %s (%s)", cur.Name, cur.Proto))
 		// 热推送新配置给服务方与访问方
 		go s.pushSync(cur.ClientID)
 		if cur.Proto == "p2p" {
@@ -858,7 +860,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 					s.mu.Lock()
 					s.cfg.AdminToken = in.NewToken
 					s.mu.Unlock()
-					core.LogEvent("warn", "管理员令牌已修改（旧令牌链接即日失效）")
+					core.LogEvent("admin", "warn", "管理员令牌已修改（旧令牌链接即日失效）")
 				}
 			}
 			s.mu.Lock()
@@ -884,7 +886,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 				}
 				if in.NewPass != "" {
 					s.cfg.AdminPassHash = hashPass(s.cfg.AdminSalt, in.NewPass)
-					core.LogEvent("ok", "管理后台密码已修改")
+					core.LogEvent("admin", "ok", "管理后台密码已修改")
 				}
 			}
 			s.mu.Unlock()

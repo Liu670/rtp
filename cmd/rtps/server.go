@@ -103,7 +103,7 @@ type Server struct {
 }
 
 func NewServer(cfg Config, cfgPath string) *Server {
-	return &Server{
+	s := &Server{
 		cfg:        cfg,
 		cfgPath:    cfgPath,
 		tunnels:    map[string]*Tunnel{},
@@ -118,6 +118,8 @@ func NewServer(cfg Config, cfgPath string) *Server {
 		sessions:      map[string]sessionInfo{},
 		startTime:     time.Now(),
 	}
+	s.registerWebhookHook()
+	return s
 }
 
 // migrate 兼容旧配置：无客户端则建默认客户端；未归属隧道的归属默认客户端
@@ -373,7 +375,7 @@ func (s *Server) handleControl(conn net.Conn) {
 	s.controls[cs.ID] = cc
 	s.controlsMu.Unlock()
 
-	core.LogEvent("ok", fmt.Sprintf("客户端上线: %s (%s)", cs.Name, cs.remoteAddr))
+	core.LogEvent("client_online", "ok", fmt.Sprintf("客户端上线: %s (%s)", cs.Name, cs.remoteAddr))
 	log.Printf("[client] %s 上线", cs.Name)
 
 	// 下发该客户端归属的隧道（含作为 target 或 visitor 的 P2P 隧道）
@@ -405,7 +407,7 @@ func (s *Server) handleControl(conn net.Conn) {
 		case "p2p_link":
 			if cm.Ok {
 				s.setP2PState(cm.TunnelID, "direct")
-				core.LogEvent("ok", fmt.Sprintf("P2P 直连成功: %s", cm.TunnelID))
+				core.LogEvent("p2p", "ok", fmt.Sprintf("P2P 直连成功: %s", cm.TunnelID))
 			}
 		}
 	}
@@ -430,7 +432,7 @@ func (s *Server) handleControl(conn net.Conn) {
 		}
 	}
 	s.p2pMu.Unlock()
-	core.LogEvent("warn", fmt.Sprintf("客户端离线: %s", cs.Name))
+	core.LogEvent("client_offline", "warn", fmt.Sprintf("客户端离线: %s", cs.Name))
 	conn.Close()
 }
 
@@ -771,7 +773,7 @@ func (s *Server) addTunnel(tc TunnelConfig) error {
 		s.cfg.Tunnels = append(s.cfg.Tunnels, tc)
 		s.mu.Unlock()
 		s.saveConfig()
-		core.LogEvent("ok", fmt.Sprintf("新增 P2P 隧道: %s", tc.Name))
+		core.LogEvent("tunnel_create", "ok", fmt.Sprintf("新增 P2P 隧道: %s", tc.Name))
 		go s.pushSync(tc.ClientID)
 		go s.pushSync(tc.VisitorClientID)
 		return nil
@@ -785,7 +787,7 @@ func (s *Server) addTunnel(tc TunnelConfig) error {
 	s.cfg.Tunnels = append(s.cfg.Tunnels, tc)
 	s.mu.Unlock()
 	s.saveConfig()
-	core.LogEvent("ok", fmt.Sprintf("新增隧道: %s (%s)", tc.Name, tc.Proto))
+	core.LogEvent("tunnel_create", "ok", fmt.Sprintf("新增隧道: %s (%s)", tc.Name, tc.Proto))
 	go s.pushSync(tc.ClientID)
 	if tc.Proto == "p2p" {
 		go s.pushSync(tc.VisitorClientID)
@@ -821,7 +823,7 @@ func (s *Server) removeTunnel(id string) error {
 	}
 	s.mu.Unlock()
 	s.saveConfig()
-	core.LogEvent("warn", fmt.Sprintf("删除隧道: %s", t.Name))
+	core.LogEvent("tunnel_delete", "warn", fmt.Sprintf("删除隧道: %s", t.Name))
 	for _, cid := range notifyTo {
 		go s.pushSync(cid)
 	}
