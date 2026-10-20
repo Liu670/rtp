@@ -10,6 +10,7 @@ const uiHTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>rtp 控制台</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
 <style>
 :root{
   --bg:#0b1020; --bg2:#0e1428; --card:rgba(255,255,255,.05); --card2:rgba(255,255,255,.08);
@@ -41,7 +42,6 @@ a{color:var(--accent);text-decoration:none}
 /* ============ 登录 ============ */
 .login-wrap{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
 .login-card{width:400px;max-width:100%%;padding:34px 32px;text-align:center}
-.login-logo{font-size:34px;font-weight:800;letter-spacing:.5px;background:linear-gradient(120deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .login-sub{color:var(--muted);font-size:13px;margin-top:4px}
 .login-tabs{display:flex;gap:6px;margin:22px 0 16px;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:4px}
 .login-tabs button{flex:1;padding:8px;border-radius:9px;font-size:13px;color:var(--muted)}
@@ -63,8 +63,11 @@ a{color:var(--accent);text-decoration:none}
 #shell{display:none;position:relative;z-index:1;min-height:100vh}
 #shell.on{display:flex}
 #sidebar{width:216px;flex-shrink:0;padding:18px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;background:var(--card);border-right:1px solid var(--border);backdrop-filter:blur(14px)}
-.brand{font-size:22px;font-weight:800;padding:4px 10px 16px;background:linear-gradient(120deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand{font-size:22px;font-weight:800;padding:4px 10px 16px;background:linear-gradient(120deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;display:flex;align-items:center}
 .brand small{font-size:11px;color:var(--muted);-webkit-text-fill-color:var(--muted);font-weight:500;margin-left:6px}
+.brand-logo{width:26px;height:26px;margin-right:7px;flex-shrink:0}
+.login-logo{font-size:34px;font-weight:800;letter-spacing:.5px;background:linear-gradient(120deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;display:flex;align-items:center;justify-content:center;gap:10px}
+.login-logo img{width:46px;height:46px}
 #sidebar nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--muted);font-size:13.5px;font-weight:500;cursor:pointer;transition:all .15s}
 #sidebar nav a:hover{background:var(--card2);color:var(--text)}
 #sidebar nav a.on{background:linear-gradient(120deg,rgba(99,102,241,.22),rgba(139,92,246,.14));color:var(--text);border:1px solid rgba(99,102,241,.35)}
@@ -241,7 +244,7 @@ tr.rowlink td:first-child{position:relative}
 <div id="app"></div>
 <div id="shell">
   <aside id="sidebar">
-    <div class="brand">rtp<small>控制台</small></div>
+    <div class="brand"><img class="brand-logo" src="/logo.svg" alt="rtp">rtp<small>控制台</small></div>
     <nav id="nav"></nav>
     <div class="side-foot">
       <button class="btn sm" id="theme-btn" title="切换亮暗主题">🌙 暗色模式</button>
@@ -319,7 +322,7 @@ function showLogin(err){
   $('shell').classList.remove('on');
   var me=state.me||{};
   $('app').innerHTML='<div class="login-wrap"><div class="login-card glass">'
-    +'<div class="login-logo">rtp</div><div class="login-sub">反向隧道代理 · 管理控制台</div>'
+    +'<div class="login-logo"><img src="/logo.svg" alt="rtp">rtp</div><div class="login-sub">反向隧道代理 · 管理控制台</div>'
     +(me.announcement?'<div class="ann-banner" style="margin-top:16px">📢 '+esc(me.announcement)+'</div>':'')
     +'<div class="login-tabs"><button id="tab-acc" class="on" onclick="switchLoginTab(0)">账号登录</button><button id="tab-tok" onclick="switchLoginTab(1)">令牌登录</button></div>'
     +'<div id="pane-acc">'

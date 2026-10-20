@@ -15,6 +15,9 @@ import (
 func (s *Server) StartWeb(addr string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
+	// 品牌 Logo（公开，登录页也需要）
+	mux.HandleFunc("/logo.svg", s.handleLogo)
+	mux.HandleFunc("/favicon.ico", s.handleLogo)
 	mux.HandleFunc("/api/overview", s.handleOverview)
 	mux.HandleFunc("/api/clients", s.handleClients)
 	mux.HandleFunc("/api/tunnels", s.handleTunnels)
