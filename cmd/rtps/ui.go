@@ -268,7 +268,7 @@ tr.rowlink td:first-child{position:relative}
 var _p=[%d,%d,%d,%d,%d,%d];
 var VERSION='';
 var NAV=[['dashboard','📊','仪表盘'],['clients','🖥','客户端'],['tunnels','🔀','隧道'],['tools','🧰','工具'],['events','📜','事件'],['settings','⚙️','设置']];
-var state={me:null,view:'dashboard',clients:[],tunnels:[],events:[],stats:null,settings:null,
+var state={me:null,view:'dashboard',clients:[],tunnels:[],events:[],stats:null,settings:null,webhooks:[],eventTypes:{},
   search:{clients:'',tunnels:'',events:''},tf:'all',ef:'all',hist:[],last:null,lastTs:0,
   probeHist:[],wiz:null,palIdx:0,palItems:[],palShown:[],deployTab:'linux'};
 
@@ -428,7 +428,7 @@ function render(){
   else if(state.view==='tunnels')c.innerHTML=viewTunnels();
   else if(state.view==='tools')c.innerHTML=viewTools();
   else if(state.view==='events')c.innerHTML=viewEvents();
-  else if(state.view==='settings')c.innerHTML=viewSettings();
+  else if(state.view==='settings'){c.innerHTML=viewSettings();renderWebhooks()}
   updateLive();
 }
 
@@ -439,7 +439,10 @@ function loadAll(){
     if((ov.events||[]).length)state.events=ov.events;
     if(state.view)render();
   }).catch(function(){});
-  loadSettings();loadStats();
+  loadSettings();loadStats();loadWebhooks();
+}
+function loadWebhooks(){
+  apiJSON('/api/webhooks').then(function(d){state.webhooks=d.webhooks||[];state.eventTypes=d.event_types||{};if(state.view==='settings')renderWebhooks()}).catch(function(){});
 }
 function loadSettings(){
   apiJSON('/api/settings').then(function(s){state.settings=s;renderRuntime();renderPorts()}).catch(function(){});
@@ -830,7 +833,7 @@ var PRESETS=[
 ];
 function openWizard(){
   state.wiz={preset:''};
-  var g='';PRESETS.forEach(function(p){g+='<div class="preset" onclick="wizPick(\''+p[0]+'\')"><div class="pi">'+p[1]+'</div><div class="pt">'+p[2]+'</div><div class="pd">'+p[3]+'</div></div>'});
+  var g='<div class="preset-grid">';PRESETS.forEach(function(p){g+='<div class="preset" onclick="wizPick(\''+p[0]+'\')"><div class="pi">'+p[1]+'</div><div class="pt">'+p[2]+'</div><div class="pd">'+p[3]+'</div></div>'});g+='</div>';
   openModal('隧道向导 · 选择场景',g,'<button class="btn" onclick="closeModal()">取消</button>');
 }
 function wizPick(p){state.wiz={preset:p};wizForm()}
@@ -1043,6 +1046,9 @@ function viewSettings(){
     +'<div class="form-row"><label>展示在登录页与控制台顶部（留空关闭）</label><textarea id="st-ann" rows="3" maxlength="200" placeholder="例如：周末 22:00-24:00 停机维护">'+esc(s.announcement||'')+'</textarea></div>'
     +'<button class="btn primary" onclick="saveAnnouncement()">保存公告</button></div>'
     +'</div>'
+    +'<div class="card glass"><div class="card-head">🔔 通知机器人 <button class="btn sm primary" style="float:right" onclick="openWebhookModal()">＋ 新建通知</button></div>'
+    +'<div class="hint" style="margin-bottom:10px">支持飞书 / 企业微信 / 钉钉群机器人 Webhook，按事件类型订阅推送（客户端上下线、隧道变更等）。</div>'
+    +'<div id="wh-list"></div></div>'
     +'<div class="card glass"><div class="card-head">🔐 账号安全</div>'
     +(s.default_pass?'<div class="ann-banner" style="margin-bottom:12px">⚠️ 仍在使用默认密码 admin / admin123，请立即修改</div>':'')
     +'<div class="kv"><span class="k">当前用户名</span><span class="v">'+esc(s.admin_user||'admin')+'</span></div>'
@@ -1102,6 +1108,76 @@ function saveAdminToken(){
     try{localStorage.setItem('rtp_tk',tk)}catch(e){}
     loadSettings();
   }).catch(function(e){toast(e.message||'更换失败','err')});
+}
+
+/* ---------- 通知机器人 ---------- */
+var WH_TYPES=[['client_online','客户端上线'],['client_offline','客户端下线'],['client_create','客户端创建'],['client_update','客户端修改'],['tunnel_create','隧道创建'],['tunnel_update','隧道修改'],['tunnel_delete','隧道删除'],['p2p','P2P 直连'],['admin','管理操作']];
+var WH_KINDS=[['feishu','飞书'],['wecom','企业微信'],['dingtalk','钉钉'],['generic','自定义 JSON']];
+function whTypeName(k){var a=state.eventTypes&&state.eventTypes[k];if(a)return a;for(var i=0;i<WH_TYPES.length;i++)if(WH_TYPES[i][0]===k)return WH_TYPES[i][1];return k}
+function whKindName(k){for(var i=0;i<WH_KINDS.length;i++)if(WH_KINDS[i][0]===k)return WH_KINDS[i][1];return k}
+function renderWebhooks(){
+  var el=$('wh-list');if(!el)return;
+  var ws=state.webhooks||[];
+  if(!ws.length){el.innerHTML='<div class="empty">尚未配置通知机器人，点击右上角「＋ 新建通知」添加</div>';return}
+  var h='';
+  ws.forEach(function(x){
+    var ev='';(x.events||[]).forEach(function(e){ev+='<span class="chip">'+esc(whTypeName(e))+'</span>'});
+    var kind='';for(var i=0;i<WH_KINDS.length;i++)if(WH_KINDS[i][0]===x.type)kind=WH_KINDS[i][1];
+    h+='<div class="wh-item" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)">'
+      +'<span class="badge">'+esc(kind||x.type)+'</span>'
+      +'<div style="flex:1;min-width:0"><div class="mono" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.url)+'</div><div style="margin-top:4px">'+ev+'</div></div>'
+      +'<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px"><input type="checkbox" '+(x.enabled?'checked':'')+' onchange="toggleWebhook(\''+esc(x.id)+'\',this.checked)">启用</label>'
+      +'<button class="btn sm" title="发送测试消息" onclick="testWebhook(\''+esc(x.id)+'\')">🧪 测试</button>'
+      +'<button class="btn sm" onclick="openWebhookModal(\''+esc(x.id)+'\')">编辑</button>'
+      +'<button class="btn sm danger" onclick="delWebhook(\''+esc(x.id)+'\')">删除</button>'
+      +'</div>';
+  });
+  el.innerHTML=h;
+}
+function openWebhookModal(id){
+  var cur=null;if(id){var ws=state.webhooks||[];for(var i=0;i<ws.length;i++)if(ws[i].id===id)cur=ws[i]}
+  var kinds='';WH_KINDS.forEach(function(k){kinds+='<option value="'+k[0]+'"'+(cur&&cur.type===k[0]?' selected':'')+'>'+k[1]+'</option>'});
+  var evs='';WH_TYPES.forEach(function(t){
+    var on=!cur||(cur.events||[]).indexOf(t[0])>=0;
+    evs+='<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wh-ev" value="'+t[0]+'"'+(on?' checked':'')+'>'+t[1]+'</label>';
+  });
+  var body='<div class="form-row"><label>机器人类型</label><select id="wh-type" style="width:100%%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--fg)">'+kinds+'</select></div>'
+    +'<div class="form-row"><label>Webhook 地址（群机器人 → 添加机器人 → 复制 Webhook 地址）</label><input id="wh-url" value="'+esc(cur?cur.url:'')+'" placeholder="https://open.feishu.cn/open-apis/bot/v2/hit/... 或 https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."></div>'
+    +'<div class="form-row"><label>订阅事件类型</label><div style="line-height:1.9">'+evs+'</div>'
+    +'<div style="margin-top:6px"><button class="btn sm" onclick="whEvAll(true)">全选</button> <button class="btn sm" onclick="whEvAll(false)">全不选</button></div></div>'
+    +'<div class="form-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="wh-enabled"'+(!cur||cur.enabled?' checked':'')+'>启用该通知</label></div>';
+  var foot='<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveWebhook('+(id?'\''+esc(id)+'\'':'null')+')">保存</button>';
+  openModal(cur?'编辑通知机器人':'新建通知机器人',body,foot);
+}
+function whEvAll(on){var l=document.querySelectorAll('.wh-ev');for(var i=0;i<l.length;i++)l[i].checked=on}
+function saveWebhook(id){
+  var type=$('wh-type').value,url=$('wh-url').value.trim();
+  var evs=[],l=document.querySelectorAll('.wh-ev');
+  for(var i=0;i<l.length;i++)if(l[i].checked)evs.push(l[i].value);
+  if(!url){toast('请填写 Webhook 地址','warn');return}
+  if(!evs.length){toast('请至少订阅一种事件类型','warn');return}
+  var body=JSON.stringify({type:type,url:url,events:evs,enabled:$('wh-enabled').checked});
+  apiJSON(id?'/api/webhooks/'+id:'/api/webhooks',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:body})
+  .then(function(){toast('通知机器人已保存');closeModal();loadWebhooks()})
+  .catch(function(e){toast(e.message||'保存失败','err')});
+}
+function delWebhook(id){
+  if(!confirm('确定删除该通知机器人？'))return;
+  apiJSON('/api/webhooks/'+id,{method:'DELETE'}).then(function(){toast('已删除');loadWebhooks()}).catch(function(e){toast(e.message||'删除失败','err')});
+}
+function testWebhook(id){
+  toast('测试消息发送中…');
+  apiJSON('/api/webhooks/'+id+'/test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+  .then(function(){toast('测试消息已发送，请到群里查看是否收到')})
+  .catch(function(e){toast(e.message||'发送失败，请检查 Webhook 地址','err')});
+}
+function toggleWebhook(id,on){
+  var ws=state.webhooks||[],cur=null;
+  for(var i=0;i<ws.length;i++)if(ws[i].id===id)cur=ws[i];
+  if(!cur)return;
+  apiJSON('/api/webhooks/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:cur.type,url:cur.url,events:cur.events,enabled:on})})
+  .then(function(){toast(on?'已启用':'已停用');loadWebhooks()})
+  .catch(function(e){toast(e.message||'操作失败','err');loadWebhooks()});
 }
 
 /* ---------- 弹窗 ---------- */

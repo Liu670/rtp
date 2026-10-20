@@ -69,6 +69,28 @@ type ClientConfig struct {
 	BwLimit   int    `json:"bw_limit_mbps"` // 0 = 不限速
 }
 
+// WebhookConfig 一个通知机器人（飞书 / 企业微信 / 钉钉 / 自定义）
+type WebhookConfig struct {
+	ID      string   `json:"id"`
+	Type    string   `json:"type"`   // feishu / wecom / dingtalk / generic
+	URL     string   `json:"url"`    // 机器人 Webhook 地址
+	Events  []string `json:"events"` // 订阅的事件类型（见 EventTypes）
+	Enabled bool     `json:"enabled"`
+}
+
+// EventTypes 支持通知的事件类型（type → 中文名）
+var EventTypes = map[string]string{
+	"client_online":  "客户端上线",
+	"client_offline": "客户端离线",
+	"client_create":  "客户端创建",
+	"client_update":  "客户端变更",
+	"tunnel_create":  "隧道新增",
+	"tunnel_update":  "隧道变更",
+	"tunnel_delete":  "隧道删除",
+	"p2p":            "P2P 穿透",
+	"admin":          "管理操作",
+}
+
 // Config 服务端持久化配置
 type Config struct {
 	AdminToken  string         `json:"admin_token"`
@@ -85,6 +107,7 @@ type Config struct {
 	Announcement  string `json:"announcement"`   // 登录页/控制台公告
 	Clients     []ClientConfig `json:"clients"`
 	Tunnels     []TunnelConfig `json:"tunnels"`
+	Webhooks    []WebhookConfig `json:"webhooks"`
 }
 
 func ReadMsg(r *bufio.Reader) (Msg, error) {
@@ -229,7 +252,8 @@ func (t *Traffic) Snapshot() (up, down int64, series []Bucket) {
 // Event 连接/系统事件，用于前端事件流
 type Event struct {
 	Ts    int64  `json:"ts"`
-	Level string `json:"level"` // info / warn / ok
+	Type  string `json:"type,omitempty"` // 事件类型（client_online 等，见 EventTypes）
+	Level string `json:"level"`          // info / warn / ok
 	Msg   string `json:"msg"`
 }
 
@@ -240,13 +264,23 @@ type eventLog struct {
 
 var events = &eventLog{}
 
-func LogEvent(level, msg string) {
+// 事件钩子：外部（如 webhook 通知）注册后，每条事件都会回调
+var evHooks []func(Event)
+
+// AddEventHook 注册事件回调（在服务启动时调用一次）
+func AddEventHook(f func(Event)) { evHooks = append(evHooks, f) }
+
+func LogEvent(evType, level, msg string) {
+	ev := Event{Ts: time.Now().Unix(), Type: evType, Level: level, Msg: msg}
 	events.mu.Lock()
-	events.items = append(events.items, Event{Ts: time.Now().Unix(), Level: level, Msg: msg})
+	events.items = append(events.items, ev)
 	if len(events.items) > 300 {
 		events.items = events.items[len(events.items)-300:]
 	}
 	events.mu.Unlock()
+	for _, h := range evHooks {
+		h(ev)
+	}
 }
 
 func RecentEvents() []Event {

@@ -141,7 +141,7 @@ func (s *Server) tryP2POffer(tc TunnelConfig) {
 	if cc := s.controlOf(tc.VisitorClientID); cc != nil {
 		_ = cc.write(Msg{Type: "p2p_offer", TunnelID: tc.ID, Role: "visitor", PeerAddr: ca.String(), VisitorPort: tc.VisitorPort, Session: session})
 	}
-	core.LogEvent("info", fmt.Sprintf("P2P 穿透启动: %s (target=%s visitor=%s)", tc.Name, tc.ClientID, tc.VisitorClientID))
+	core.LogEvent("p2p", "info", fmt.Sprintf("P2P 穿透启动: %s (target=%s visitor=%s)", tc.Name, tc.ClientID, tc.VisitorClientID))
 }
 
 // 客户端上线后，对其相关的 p2p 隧道尝试下发 offer
@@ -177,7 +177,7 @@ func (s *Server) handleP2PRelayOpen(tunnelID, visitorConnID string) {
 	// visitor 端建立到自身本地监听端口的连接
 	_ = csV.cc.write(Msg{Type: "relay_accept", ConnID: visitorConnID})
 	s.setP2PState(tunnelID, "relay")
-	core.LogEvent("warn", fmt.Sprintf("P2P 回退到服务器中转: %s", t.Name))
+	core.LogEvent("p2p", "warn", fmt.Sprintf("P2P 回退到服务器中转: %s", t.Name))
 
 	go func() {
 		var a, b net.Conn
