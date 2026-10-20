@@ -114,6 +114,8 @@ type Server struct {
 	sessMu   sync.Mutex
 	sessions map[string]sessionInfo // sessionID -> 会话
 	startTime time.Time
+	// 流量台账：按自然日累计上行/下行，落盘 traffic.json
+	ledger *TrafficLedger
 	// 生命周期标记（GUI 模式下用于启停）
 	running bool
 }
@@ -133,6 +135,7 @@ func NewServer(cfg Config, cfgPath string) *Server {
 		p2pStates:     map[string]string{},
 		sessions:      map[string]sessionInfo{},
 		startTime:     time.Now(),
+		ledger:        newLedger(cfgPath),
 	}
 	s.registerWebhookHook()
 	return s
@@ -249,6 +252,7 @@ func (s *Server) saveConfig() {
 func (s *Server) Stop() {
 	s.mu.Lock()
 	s.running = false
+	s.ledger.save()
 	tunnels := make([]*Tunnel, 0, len(s.tunnels))
 	for _, t := range s.tunnels {
 		tunnels = append(tunnels, t)
@@ -270,6 +274,8 @@ func (s *Server) Run() {
 	s.migrate()
 	s.buildClients()
 	s.rebuildRoutes()
+	s.ledger.load()
+	go s.ledgerSaver()
 
 	go s.serveControl(fmt.Sprintf(":%d", s.cfg.ControlPort))
 	go s.serveWork(fmt.Sprintf(":%d", s.cfg.WorkPort))
@@ -317,8 +323,23 @@ func (s *Server) sampler() {
 			if cs := s.clientOf(t.ClientID); cs != nil {
 				cs.traffic.Add(dS2c, dC2s)
 			}
+			s.ledger.Add(dS2c, dC2s, time.Now()) // 写入服务级每日台账
 		}
 		_ = lastC
+	}
+}
+
+// ledgerSaver 周期性将流量台账落盘（每分钟一次），服务停止时由 Stop 再保存一次。
+func (s *Server) ledgerSaver() {
+	for {
+		time.Sleep(60 * time.Second)
+		s.ledger.save()
+		s.mu.Lock()
+		running := s.running
+		s.mu.Unlock()
+		if !running {
+			return
+		}
 	}
 }
 
