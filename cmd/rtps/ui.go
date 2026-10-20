@@ -610,7 +610,7 @@ function viewTraffic(){
     +'</div>'
     +'<div class="grid-4" id="tf-cards"></div>'
     +'<div class="card glass"><div class="card-head"><span>📈 流量趋势（上行 / 下行）</span><span class="legend"><span><i class="dot up"></i>上行</span><span><i class="dot down"></i>下行</span></span></div><canvas id="tf-chart"></canvas></div>'
-    +'<div class="card glass"><div class="card-head">📋 数据明细</div><div style="overflow:auto"><table><thead><tr><th>'+(state.report&&state.report.granularity==='month'?'月份':'日期')+'</th><th>上行</th><th>下行</th><th>合计</th></tr></thead><tbody id="tf-rows"></tbody></table></div></div>';
+    +'<div class="card glass"><div class="card-head">📋 数据明细</div><div style="overflow:auto"><table><thead><tr><th id="tf-th1">日期</th><th>上行</th><th>下行</th><th>合计</th></tr></thead><tbody id="tf-rows"></tbody></table></div></div>';
 }
 function tfReload(){
   var g=$('tf-gran').value, f=$('tf-from').value, t=$('tf-to').value;
@@ -623,6 +623,7 @@ function tfCard(label,val,color){
 }
 function renderTraffic(){
   var d=state.report; if(!d){return;}
+  var th1=$('tf-th1'); if(th1)th1.textContent=(d.granularity==='month'?'月份':'日期');
   $('tf-cards').innerHTML=
      tfCard('累计上行', d.total_up, 'var(--up)')
     +tfCard('累计下行', d.total_down, 'var(--down)')
@@ -1366,7 +1367,7 @@ document.addEventListener('keydown',function(e){
   }
   var tag=(e.target.tagName||'').toLowerCase();
   if(tag==='input'||tag==='textarea'||tag==='select')return;
-  if(e.key>='1'&&e.key<='6'){go(['dashboard','clients','tunnels','tools','events','settings'][e.key-'1'])}
+  if(e.key>='1'&&e.key<='9'&&NAV[e.key-'1']){go(NAV[e.key-'1'][0])}
   else if(e.key==='/'){e.preventDefault();var s=document.querySelector('.toolbar input');if(s)s.focus()}
 });
 
