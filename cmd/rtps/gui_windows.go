@@ -46,7 +46,7 @@ var (
 	guiCfg    *Config
 )
 
-// runGUI 是 rtps 在 Windows 上的图形界面入口。
+// runGUI 是 rtps 在 Windows 上的桌面界面入口。
 // GUI 只负责「配置 + 启停 + 一键打开 Web 控制台」，所有隧道/客户端管理仍由
 // Web 控制台完成（服务端与 Web 共用同一套 HTTP 接口，避免两套逻辑分叉）。
 func runGUI() {
@@ -60,7 +60,7 @@ func runGUI() {
 	app := winui.New("rtp 内网穿透服务端", 560, 470)
 	guiApp = app
 
-	app.Label(0, "rtp 内网穿透服务端  ·  Windows 图形界面", 20, 14, 520, 22)
+	app.Label(0, "rtp 内网穿透服务端  ·  Windows 桌面界面", 20, 14, 520, 22)
 	app.Label(0, "在这里配置端口并启停服务；隧道与客户端管理请使用 Web 控制台。", 20, 38, 520, 20)
 
 	y := 68
@@ -107,7 +107,7 @@ func runGUI() {
 		{Text: "退出", ID: idMenuQuit},
 	})
 	app.Tick(1000, tick)
-	appendLog("rtp 服务端图形界面已就绪")
+	appendLog("rtp 服务端桌面界面已就绪")
 
 	app.Run()
 }

@@ -53,7 +53,7 @@ type clientCfg struct {
 	Name   string `json:"name"`
 }
 
-// runGUI 是 rtpc 的 Windows 图形界面入口。
+// runGUI 是 rtpc 的 Windows 桌面界面入口。
 // 双击运行不再出现黑窗一闪而过：缺少参数时直接打开本界面，填完点「连接」即可。
 func runGUI() {
 	cfg := loadClientCfg()
@@ -61,7 +61,7 @@ func runGUI() {
 	cApp = winui.New("rtp 内网穿透客户端", 540, 500)
 	cCfg = cfg
 
-	cApp.Label(0, "rtp 内网穿透客户端  ·  Windows 图形界面", 20, 14, 500, 22)
+	cApp.Label(0, "rtp 内网穿透客户端  ·  Windows 桌面界面", 20, 14, 500, 22)
 	cApp.Label(0, "填写服务端地址与客户端令牌，点「连接」即可接入内网穿透。", 20, 38, 500, 20)
 
 	y := 68
