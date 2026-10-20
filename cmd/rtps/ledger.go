@@ -134,30 +134,29 @@ func (l *TrafficLedger) Query(from, to, gran string) trafficReport {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// 区间逐日
+	// 区间逐日累计（period 汇总始终按天计算，与粒度无关）
 	var periodUp, periodDown int64
-	if gran != "month" {
-		for d := f; !d.After(t); d = d.AddDate(0, 0, 1) {
-			k := d.Format("2006-01-02")
-			rec := l.days[k]
-			periodUp += rec.Up
-			periodDown += rec.Down
-			rep.Rows = append(rep.Rows, trafficRow{Key: k, Up: rec.Up, Down: rec.Down})
-		}
-	} else {
-		type mr struct{ up, down int64 }
-		mm := map[string]*mr{}
-		var ks []string
-		for d := f; !d.After(t); d = d.AddDate(0, 0, 1) {
+	type mr struct{ up, down int64 }
+	mm := map[string]*mr{}
+	var ks []string
+	for d := f; !d.After(t); d = d.AddDate(0, 0, 1) {
+		k := d.Format("2006-01-02")
+		rec := l.days[k]
+		periodUp += rec.Up
+		periodDown += rec.Down
+		if gran == "month" {
 			mk := d.Format("2006-01")
 			if mm[mk] == nil {
 				mm[mk] = &mr{}
 				ks = append(ks, mk)
 			}
-			rec := l.days[d.Format("2006-01-02")]
 			mm[mk].up += rec.Up
 			mm[mk].down += rec.Down
+		} else {
+			rep.Rows = append(rep.Rows, trafficRow{Key: k, Up: rec.Up, Down: rec.Down})
 		}
+	}
+	if gran == "month" {
 		sort.Strings(ks)
 		for _, k := range ks {
 			rep.Rows = append(rep.Rows, trafficRow{Key: k, Up: mm[k].up, Down: mm[k].down})
