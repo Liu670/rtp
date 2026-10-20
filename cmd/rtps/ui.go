@@ -106,6 +106,7 @@ body.light #topbar{background:rgba(255,255,255,.78)}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%%;margin-right:5px;vertical-align:1px}
 .dot.up{background:var(--up)}.dot.down{background:var(--down)}
 #bw{width:100%%;height:190px;display:block}
+#tf-chart{width:100%%;height:300px;display:block}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--card2);font-size:12.5px;cursor:pointer;transition:all .15s;color:var(--muted)}
 .chip:hover{color:var(--text);border-color:var(--accent)}
@@ -270,9 +271,10 @@ tr.rowlink td:first-child{position:relative}
 <script>
 var _p=[%d,%d,%d,%d,%d,%d];
 var VERSION='';
-var NAV=[['dashboard','📊','仪表盘'],['clients','🖥','客户端'],['tunnels','🔀','隧道'],['tools','🧰','工具'],['events','📜','事件'],['settings','⚙️','设置']];
+var NAV=[['dashboard','📊','仪表盘'],['clients','🖥','客户端'],['tunnels','🔀','隧道'],['traffic','📈','流量'],['tools','🧰','工具'],['events','📜','事件'],['settings','⚙️','设置']];
 var state={me:null,view:'dashboard',clients:[],tunnels:[],events:[],stats:null,settings:null,webhooks:[],eventTypes:{},
   search:{clients:'',tunnels:'',events:''},tf:'all',ef:'all',hist:[],last:null,lastTs:0,
+  report:null,
   probeHist:[],wiz:null,palIdx:0,palItems:[],palShown:[],deployTab:'linux'};
 
 /* ---------- 基础 ---------- */
@@ -429,6 +431,7 @@ function render(){
   if(state.view==='dashboard')c.innerHTML=viewDashboard();
   else if(state.view==='clients')c.innerHTML=viewClients();
   else if(state.view==='tunnels')c.innerHTML=viewTunnels();
+  else if(state.view==='traffic'){c.innerHTML=viewTraffic();tfReload()}
   else if(state.view==='tools')c.innerHTML=viewTools();
   else if(state.view==='events')c.innerHTML=viewEvents();
   else if(state.view==='settings'){c.innerHTML=viewSettings();renderWebhooks()}
@@ -529,8 +532,8 @@ function viewDashboard(){
     +'<div class="grid-4">'
     +'<div class="card glass stat clickable" onclick="go(\'clients\')" title="点击查看客户端"><div class="stat-label">在线客户端 ↗</div><div class="stat-val" id="st-online">-</div><div class="stat-sub" id="st-online-sub"></div></div>'
     +'<div class="card glass stat clickable" onclick="go(\'tunnels\')" title="点击管理隧道"><div class="stat-label">隧道总数 ↗</div><div class="stat-val" id="st-tunnels">-</div><div class="stat-sub" id="st-tunnels-sub"></div></div>'
-    +'<div class="card glass stat"><div class="stat-label">实时上行 <span class="dot up"></span></div><div class="stat-val" id="st-up" style="color:var(--up)">-</div><div class="stat-sub">外网 → 内网</div></div>'
-    +'<div class="card glass stat"><div class="stat-label">实时下行 <span class="dot down"></span></div><div class="stat-val" id="st-down" style="color:var(--down)">-</div><div class="stat-sub">内网 → 外网</div></div>'
+    +'<div class="card glass stat clickable" onclick="go(\'traffic\')" title="点击查看流量统计（累计 / 按月 / 按日）"><div class="stat-label">实时上行 <span class="dot up"></span></div><div class="stat-val" id="st-up" style="color:var(--up)">-</div><div class="stat-sub">外网 → 内网 · 点击查看统计</div></div>'
+    +'<div class="card glass stat clickable" onclick="go(\'traffic\')" title="点击查看流量统计（累计 / 按月 / 按日）"><div class="stat-label">实时下行 <span class="dot down"></span></div><div class="stat-val" id="st-down" style="color:var(--down)">-</div><div class="stat-sub">内网 → 外网 · 点击查看统计</div></div>'
     +'</div>'
     +'<div class="card glass"><div class="card-head"><span>📈 实时带宽（近 60 秒）</span><span class="legend"><span><i class="dot up"></i>上行</span><span><i class="dot down"></i>下行</span></span></div><canvas id="bw"></canvas></div>'
     +'<div class="grid-2">'
@@ -591,6 +594,91 @@ function renderEventsMini(){
 }
 setInterval(function(){if(state.view==='dashboard')renderRuntime()},5000);
 setInterval(function(){if(state.view==='dashboard')renderPorts()},5000);
+
+/* ---------- 视图：流量统计 ---------- */
+function fmtDate(d){var y=d.getFullYear(),m=('0'+(d.getMonth()+1)).slice(-2),da=('0'+d.getDate()).slice(-2);return y+'-'+m+'-'+da}
+function viewTraffic(){
+  var now=new Date(), to=fmtDate(now), from=fmtDate(new Date(now.getTime()-29*86400000));
+  return '<div class="page-head"><div><h1>流量统计</h1><div class="page-sub">累计 / 当月 / 上月 / 按日 / 按月 上行下行流量，支持时间段筛选</div></div>'
+    +'<button class="btn" onclick="go(\'dashboard\')">← 返回仪表盘</button></div>'
+    +'<div class="toolbar">'
+      +'<label>粒度</label><select id="tf-gran" onchange="tfReload()"><option value="day">按日</option><option value="month">按月</option></select>'
+      +'<label>从</label><input type="date" id="tf-from" value="'+from+'">'
+      +'<label>到</label><input type="date" id="tf-to" value="'+to+'">'
+      +'<button class="btn primary" onclick="tfReload()">查询</button>'
+      +'<button class="btn" onclick="tfExport()">⬇ 导出 CSV</button>'
+    +'</div>'
+    +'<div class="grid-4" id="tf-cards"></div>'
+    +'<div class="card glass"><div class="card-head"><span>📈 流量趋势（上行 / 下行）</span><span class="legend"><span><i class="dot up"></i>上行</span><span><i class="dot down"></i>下行</span></span></div><canvas id="tf-chart"></canvas></div>'
+    +'<div class="card glass"><div class="card-head">📋 数据明细</div><div style="overflow:auto"><table><thead><tr><th>'+(state.report&&state.report.granularity==='month'?'月份':'日期')+'</th><th>上行</th><th>下行</th><th>合计</th></tr></thead><tbody id="tf-rows"></tbody></table></div></div>';
+}
+function tfReload(){
+  var g=$('tf-gran').value, f=$('tf-from').value, t=$('tf-to').value;
+  apiJSON('/api/traffic/summary?gran='+encodeURIComponent(g)+'&from='+encodeURIComponent(f)+'&to='+encodeURIComponent(t)).then(function(d){
+    state.report=d; renderTraffic();
+  }).catch(function(e){toast((e.message||'查询失败'),'err')});
+}
+function tfCard(label,val,color){
+  return '<div class="card glass stat"><div class="stat-label">'+label+'</div><div class="stat-val" style="color:'+color+'">'+fmtBytes(val)+'</div></div>';
+}
+function renderTraffic(){
+  var d=state.report; if(!d){return;}
+  $('tf-cards').innerHTML=
+     tfCard('累计上行', d.total_up, 'var(--up)')
+    +tfCard('累计下行', d.total_down, 'var(--down)')
+    +tfCard('本月上行', d.cur_month_up, 'var(--up)')
+    +tfCard('本月下行', d.cur_month_down, 'var(--down)')
+    +tfCard('上月上行', d.last_month_up, 'var(--up)')
+    +tfCard('上月下行', d.last_month_down, 'var(--down)')
+    +tfCard('区间上行', d.period_up, 'var(--up)')
+    +tfCard('区间下行', d.period_down, 'var(--down)');
+  var rows=d.rows||[], h='';
+  rows.forEach(function(r){h+='<tr><td>'+esc(r.key)+'</td><td>'+fmtBytes(r.up)+'</td><td>'+fmtBytes(r.down)+'</td><td>'+fmtBytes(r.up+r.down)+'</td></tr>'});
+  if(!rows.length)h='<tr><td colspan="4"><div class="empty"><div class="big">📭</div>该时间段暂无流量记录（服务重启前的历史也可能尚未产生）</div></td></tr>';
+  $('tf-rows').innerHTML=h;
+  drawTrafficChart();
+}
+function drawTrafficChart(){
+  var cv=$('tf-chart'); if(!cv)return;
+  var dpr=window.devicePixelRatio||1, W=cv.clientWidth||800, H=300;
+  if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
+  var ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  var rows=(state.report&&state.report.rows)||[];
+  if(!rows.length){ctx.fillStyle='rgba(139,147,173,.6)';ctx.font='12px system-ui';ctx.fillText('暂无数据',10,20);return}
+  var max=0,i;
+  for(i=0;i<rows.length;i++){if(rows[i].up>max)max=rows[i].up;if(rows[i].down>max)max=rows[i].down}
+  if(max<=0)max=1;
+  var cs=getComputedStyle(document.body);
+  var bd=cs.getPropertyValue('--border').trim()||'rgba(255,255,255,.1)';
+  var up=cs.getPropertyValue('--up').trim()||'#38bdf8',dn=cs.getPropertyValue('--down').trim()||'#34d399';
+  var mu=cs.getPropertyValue('--muted').trim()||'#888';
+  ctx.strokeStyle=bd;ctx.lineWidth=1;
+  for(var g=1;g<=4;g++){var y=H-H*g/5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  ctx.fillStyle=mu;ctx.font='11px system-ui';
+  ctx.fillText(fmtBytes(max),4,14);ctx.fillText('0',4,H-4);
+  var n=rows.length, stepX=W/Math.max(1,n-1);
+  function series(key,color,fill){
+    ctx.beginPath();
+    for(i=0;i<n;i++){var x=i*stepX,y=H-(rows[i][key]/max)*(H-26)-14;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+    if(fill){ctx.lineTo((n-1)*stepX,H);ctx.lineTo(0,H);ctx.closePath();var gr=ctx.createLinearGradient(0,0,0,H);gr.addColorStop(0,color+'33');gr.addColorStop(1,color+'00');ctx.fillStyle=gr;ctx.fill()}
+  }
+  series('up',up,true);series('down',dn,true);
+  var labelStep=Math.max(1,Math.ceil(n/8));
+  ctx.fillStyle=mu;ctx.font='10px system-ui';
+  for(i=0;i<n;i+=labelStep){var x=i*stepX;var lbl=rows[i].key;if(state.report.granularity==='month')lbl=lbl.slice(2);else lbl=lbl.slice(5);ctx.fillText(lbl,x,H-2)}
+}
+function tfExport(){
+  var d=state.report; if(!d){toast('暂无数据可导出','err');return;}
+  var csv='周期,上行(bytes),下行(bytes),合计(bytes)\n';
+  (d.rows||[]).forEach(function(r){csv+=r.key+','+r.up+','+r.down+','+(r.up+r.down)+'\n'});
+  csv+='累计,'+d.total_up+','+d.total_down+','+(d.total_up+d.total_down)+'\n';
+  csv+='本月,'+d.cur_month_up+','+d.cur_month_down+','+(d.cur_month_up+d.cur_month_down)+'\n';
+  csv+='上月,'+d.last_month_up+','+d.last_month_down+','+(d.last_month_up+d.last_month_down)+'\n';
+  var blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='rtp流量_'+(d.from||'')+'_'+(d.to||'')+'.csv';a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+}
 
 /* ---------- 视图：客户端 ---------- */
 function viewClients(){
