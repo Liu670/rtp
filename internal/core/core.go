@@ -1,4 +1,6 @@
-package main
+// Package core 提供 rtp 服务端与客户端共享的基础设施：
+// 行协议、隧道/客户端/配置结构、限速、字节搬运、流量时序与事件日志。
+package core
 
 import (
 	"bufio"
@@ -85,7 +87,7 @@ type Config struct {
 	Tunnels     []TunnelConfig `json:"tunnels"`
 }
 
-func readMsg(r *bufio.Reader) (Msg, error) {
+func ReadMsg(r *bufio.Reader) (Msg, error) {
 	line, err := r.ReadBytes('\n')
 	if err != nil {
 		return Msg{}, err
@@ -97,7 +99,7 @@ func readMsg(r *bufio.Reader) (Msg, error) {
 	return m, nil
 }
 
-func writeMsg(w *bufio.Writer, m Msg) error {
+func WriteMsg(w *bufio.Writer, m Msg) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -108,7 +110,7 @@ func writeMsg(w *bufio.Writer, m Msg) error {
 	return w.Flush()
 }
 
-func randID() string {
+func RandID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)
@@ -122,11 +124,11 @@ type Throttle struct {
 	last      time.Time
 }
 
-func newThrottle(rate int64) *Throttle {
+func NewThrottle(rate int64) *Throttle {
 	return &Throttle{rate: rate, last: time.Now()}
 }
 
-func (t *Throttle) setRate(rate int64) { atomic.StoreInt64(&t.rate, rate) }
+func (t *Throttle) SetRate(rate int64) { atomic.StoreInt64(&t.rate, rate) }
 
 func (t *Throttle) maybe(n int64) {
 	rate := atomic.LoadInt64(&t.rate)
@@ -152,8 +154,8 @@ func (t *Throttle) maybe(n int64) {
 	time.Sleep(time.Duration(float64(deficit) / float64(rate) * float64(time.Second)))
 }
 
-// pump 在两个连接之间双向搬运字节；counter 非 nil 时累加流量；th 非 nil 时按方向限速
-func pump(dst net.Conn, src io.Reader, counter *int64, th *Throttle) {
+// Pump 在两个连接之间双向搬运字节；counter 非 nil 时累加流量；th 非 nil 时按方向限速
+func Pump(dst net.Conn, src io.Reader, counter *int64, th *Throttle) {
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := src.Read(buf)
@@ -174,7 +176,82 @@ func pump(dst net.Conn, src io.Reader, counter *int64, th *Throttle) {
 	}
 }
 
-func closer(a, b io.Closer) {
+func CloseBoth(a, b io.Closer) {
 	a.Close()
 	b.Close()
+}
+
+// 流量时序：累计值 + 每分钟一个桶，保留最近 bucketMinutes 个桶
+const bucketMinutes = 180
+
+type Bucket struct {
+	Ts   int64 `json:"ts"`   // 该分钟的时间戳（秒）
+	Up   int64 `json:"up"`   // 上行字节（内网 -> 用户）
+	Down int64 `json:"down"` // 下行字节（用户 -> 内网）
+}
+
+type Traffic struct {
+	mu      sync.Mutex
+	cUp     int64
+	cDown   int64
+	buckets []Bucket
+}
+
+func NewTraffic() *Traffic {
+	return &Traffic{buckets: make([]Bucket, 0, bucketMinutes)}
+}
+
+func (t *Traffic) Add(up, down int64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.cUp += up
+	t.cDown += down
+	now := time.Now().Unix()
+	if len(t.buckets) == 0 || t.buckets[len(t.buckets)-1].Ts != now {
+		t.buckets = append(t.buckets, Bucket{Ts: now})
+		if len(t.buckets) > bucketMinutes {
+			t.buckets = t.buckets[len(t.buckets)-bucketMinutes:]
+		}
+	}
+	b := &t.buckets[len(t.buckets)-1]
+	b.Up += up
+	b.Down += down
+}
+
+// snapshot 返回累计值与最近若干分钟时序（用于绘图）
+func (t *Traffic) Snapshot() (up, down int64, series []Bucket) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	series = append([]Bucket(nil), t.buckets...)
+	return t.cUp, t.cDown, series
+}
+
+// Event 连接/系统事件，用于前端事件流
+type Event struct {
+	Ts    int64  `json:"ts"`
+	Level string `json:"level"` // info / warn / ok
+	Msg   string `json:"msg"`
+}
+
+type eventLog struct {
+	mu    sync.Mutex
+	items []Event
+}
+
+var events = &eventLog{}
+
+func LogEvent(level, msg string) {
+	events.mu.Lock()
+	events.items = append(events.items, Event{Ts: time.Now().Unix(), Level: level, Msg: msg})
+	if len(events.items) > 300 {
+		events.items = events.items[len(events.items)-300:]
+	}
+	events.mu.Unlock()
+}
+
+func RecentEvents() []Event {
+	events.mu.Lock()
+	defer events.mu.Unlock()
+	out := append([]Event(nil), events.items...)
+	return out
 }
