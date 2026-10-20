@@ -15,7 +15,7 @@ import (
 )
 
 // RtpVersion 当前版本号，展示在控制台「关于」中
-const RtpVersion = "1.5.0"
+const RtpVersion = "1.3.0"
 
 const sessionCookie = "rtp_session"
 const sessionMaxAge = 7 * 24 * 3600 // 会话有效期（秒）
