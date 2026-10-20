@@ -28,6 +28,26 @@
 - **一键下载客户端**：控制台直接下载 Windows / Linux / macOS 单文件客户端。
 - **公告栏**：登录页与控制台顶部展示自定义公告。
 
+## 📸 控制台预览
+
+> 以下截图来自[演示实例](#-快速开始)（模拟数据），暗色主题；另有 4 套浅色/彩色配色可在「设置」切换。
+
+| 仪表盘 · 实时带宽曲线 | 隧道管理 · 6 种协议 |
+|---|---|
+| ![仪表盘](assets/screenshots/02-dashboard.png) | ![隧道管理](assets/screenshots/04-tunnels.png) |
+
+| 客户端 · 独立令牌/限速 | 隧道向导 · 场景化创建 |
+|---|---|
+| ![客户端](assets/screenshots/03-clients.png) | ![隧道向导](assets/screenshots/05-wizard.png) |
+
+| 隧道编辑 · 可视化热重载 | 工具箱 · 诊断/备份/部署命令 |
+|---|---|
+| ![编辑隧道](assets/screenshots/06-tunnel-edit.png) | ![工具箱](assets/screenshots/08-tools.png) |
+
+| 登录 · 账号密码/令牌双鉴权 | 事件流 · 分级筛选 |
+|---|---|
+| ![登录](assets/screenshots/01-login.png) | ![事件](assets/screenshots/07-events.png) |
+
 ## 🏗️ 架构
 
 ```
@@ -45,21 +65,21 @@
 
 ## 🚀 快速开始
 
-### 1. 编译（或在 [Releases](../../releases) 下载）
+### 1. 编译（或在 [Releases](../../releases) 直接下载全平台二进制）
 
 ```bash
-git clone https://github.com/<你的用户名>/rtp.git && cd rtp
+git clone https://github.com/Liu670/rtp.git && cd rtp
 
 # 服务端
-go build -tags server -o rtps .
+go build -o rtps ./cmd/rtps
 
 # 客户端（当前平台）
-go build -tags client -o rtpc .
+go build -o rtpc ./cmd/rtpc
 
 # 交叉编译
-GOOS=windows GOARCH=amd64 go build -tags client -o rtpc.exe .
-GOOS=darwin  GOARCH=amd64 go build -tags client -o rtpc-darwin .
-GOOS=linux   GOARCH=amd64 go build -tags server -o rtps-linux .
+GOOS=windows GOARCH=amd64 go build -o rtpc.exe        ./cmd/rtpc
+GOOS=darwin  GOARCH=amd64 go build -o rtpc-darwin     ./cmd/rtpc
+GOOS=linux   GOARCH=amd64 go build -o rtps-linux      ./cmd/rtps
 ```
 
 要求 Go 1.21+，无任何第三方依赖。
@@ -125,19 +145,28 @@ rtpc -server <服务器IP>:7000 -token <客户端token> -name home-pc
 
 服务端启动参数：`-config`（配置路径，默认 `config.json`）、`-control/-work/-web`（端口覆盖）、`-token`（管理令牌覆盖）。账号密码哈希由服务端自动管理并在界面修改。全部字段说明见[使用文档](./使用文档.md)。
 
-## 📁 源码结构
+## 📁 目录结构
 
-| 文件 | 说明 |
-|---|---|
-| `proto.go` | 行协议（JSON 行）、隧道/客户端/配置结构、令牌桶限速 `Throttle`、`pump` 字节搬运 |
-| `model.go` | 流量时序 `Traffic`（累计 + 每分钟桶）、事件日志 `eventLog` |
-| `server.go` | 服务端运行时、控制/工作连接、公网监听、conn_id 配对透传、UDP 中继、隧道热推送与热重载 |
-| `p2p.go` | 服务端 P2P 协调器（UDP 信令、候选地址记录、offer 下发、relay 回退） |
-| `p2pclient.go` | 客户端 P2P（周期信令、UDP 打洞、RUDP 可靠流、访问端本地监听、relay 回退） |
-| `web.go` | Web 控制台后端（全部 REST API + SSE + 登录会话 + 客户端下载） |
-| `auth.go` | 账号密码鉴权（sha256 加盐、会话 cookie）、连通性测试、备份/恢复 |
-| `ui.go` | 原生前端 SPA（无外部依赖，暗/亮主题 + 5 套配色，命令面板，canvas 实时曲线） |
-| `server_main.go` / `client_main.go` | 两个二进制入口（build tag `server` / `client`） |
+```
+rtp/
+├── cmd/
+│   ├── rtps/            # 服务端入口（main.go + 服务端实现）
+│   │   ├── main.go      # 启动参数与入口
+│   │   ├── server.go    # 运行时、控制/工作连接、公网监听、隧道热推送与热重载
+│   │   ├── web.go       # Web 控制台后端（REST API + SSE + 客户端下载）
+│   │   ├── ui.go        # 原生前端 SPA（无外部依赖）
+│   │   ├── auth.go      # 账号密码鉴权、连通性测试、备份/恢复
+│   │   └── p2p.go       # 服务端 P2P 协调器（信令/打洞/relay 回退）
+│   └── rtpc/            # 客户端入口（main.go + 客户端实现）
+│       ├── main.go      # 启动参数与入口
+│       ├── client.go    # 控制连接、隧道中继、UDP 转发
+│       └── p2pclient.go # 客户端 P2P（UDP 打洞、RUDP 可靠流、访问端监听）
+├── internal/
+│   └── core/            # 服务端/客户端共享：行协议、结构定义、限速、流量时序、事件日志
+├── .github/workflows/   # CI 构建检查 + tag 自动发布 Release
+├── assets/screenshots/  # 控制台截图
+└── 使用文档.md           # 完整操作手册
+```
 
 ## 🔒 安全提示
 
