@@ -803,12 +803,20 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.URL.Query().Get("name")
 	allowed := map[string]bool{
-		"rtpc":               true,
-		"rtpc.exe":           true,
-		"rtpc-linux":         true,
-		"rtpc-darwin":        true,
-		"rtpc-android-arm64": true,
-		"rtp-android.apk":    true,
+		// 客户端
+		"rtpc":                        true,
+		"rtpc.exe":                    true,
+		"rtpc-linux":                  true,
+		"rtpc-darwin":                 true,
+		"rtpc-android-arm64":          true,
+		"rtp-android.apk":             true,
+		"rtpc-windows-amd64.exe":      true,
+		"rtpc-windows-cli-amd64.exe":  true,
+		// 服务端
+		"rtps-linux":                  true,
+		"rtps-darwin":                 true,
+		"rtps-windows-amd64.exe":      true,
+		"rtps-windows-cli-amd64.exe":  true,
 	}
 	if !allowed[name] {
 		http.Error(w, "not found", http.StatusNotFound)
