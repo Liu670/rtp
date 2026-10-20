@@ -812,6 +812,8 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		"rtp-android.apk":             true,
 		"rtpc-windows-amd64.exe":      true,
 		"rtpc-windows-cli-amd64.exe":  true,
+		"rtpc-windows-arm64.exe":      true,
+		"rtpc-windows-cli-arm64.exe":  true,
 		// 服务端
 		"rtps-linux":                  true,
 		"rtps-darwin":                 true,
