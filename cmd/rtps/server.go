@@ -31,6 +31,20 @@ func (t *Tunnel) counters() (c2s, s2c int64) {
 	return atomic.LoadInt64(&t.c2s), atomic.LoadInt64(&t.s2c)
 }
 
+// stop 关闭该隧道的 TCP/UDP 监听（用于服务端整体停止）。
+func (t *Tunnel) stop() {
+	t.mu.Lock()
+	ln, pc := t.listener, t.udpConn
+	t.listener, t.udpConn = nil, nil
+	t.mu.Unlock()
+	if ln != nil {
+		_ = ln.Close()
+	}
+	if pc != nil {
+		_ = pc.Close()
+	}
+}
+
 type ClientState struct {
 	ClientConfig
 	mu         sync.Mutex
@@ -100,6 +114,8 @@ type Server struct {
 	sessMu   sync.Mutex
 	sessions map[string]sessionInfo // sessionID -> 会话
 	startTime time.Time
+	// 生命周期标记（GUI 模式下用于启停）
+	running bool
 }
 
 func NewServer(cfg Config, cfgPath string) *Server {
@@ -229,7 +245,28 @@ func (s *Server) saveConfig() {
 
 // ---------- 运行 ----------
 
+// Stop 关闭所有隧道监听并标记服务停止（供 Windows GUI 停止服务使用）。
+func (s *Server) Stop() {
+	s.mu.Lock()
+	s.running = false
+	tunnels := make([]*Tunnel, 0, len(s.tunnels))
+	for _, t := range s.tunnels {
+		tunnels = append(tunnels, t)
+	}
+	s.tunnels = map[string]*Tunnel{}
+	s.mu.Unlock()
+
+	for _, t := range tunnels {
+		t.stop()
+	}
+	core.LogEvent("admin", "warn", "服务端已停止（GUI 操作）")
+}
+
 func (s *Server) Run() {
+	s.mu.Lock()
+	s.running = true
+	s.mu.Unlock()
+
 	s.migrate()
 	s.buildClients()
 	s.rebuildRoutes()

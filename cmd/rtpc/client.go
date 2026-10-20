@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,6 +38,19 @@ type Client struct {
 	workPort int
 	p2pPort  int
 
+	// 生命周期（GUI 模式用于主动断开）
+	stopped bool
+	conn    net.Conn
+
+	// 状态回调（GUI 模式用于刷新界面）
+	OnState func(state, detail string)
+	OnTraffic func(up, down int64)
+
+	trafficMu   sync.Mutex
+	trafficStop chan struct{}
+	upBytes     int64
+	downBytes   int64
+
 	p2pConn       *net.UDPConn
 	p2pServerAddr net.Addr
 	p2pLinks      map[string]*p2pLink
@@ -47,12 +61,86 @@ type Client struct {
 	ctrlSend chan Msg
 }
 
+// Stop 主动断开并停止重连（供 GUI 使用）。
+func (c *Client) Stop() {
+	c.mu.Lock()
+	c.stopped = true
+	conn := c.conn
+	c.mu.Unlock()
+	if conn != nil {
+		_ = conn.Close()
+	}
+	c.trafficMu.Lock()
+	if c.trafficStop != nil {
+		close(c.trafficStop)
+		c.trafficStop = nil
+	}
+	c.trafficMu.Unlock()
+}
+
+func (c *Client) isStopped() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.stopped
+}
+
+func (c *Client) emitState(state, detail string) {
+	if c.OnState != nil {
+		c.OnState(state, detail)
+	}
+}
+
+// startTrafficStats 每秒回调一次累计流量（GUI 用）。
+func (c *Client) startTrafficStats() {
+	c.trafficMu.Lock()
+	if c.trafficStop != nil {
+		c.trafficMu.Unlock()
+		return
+	}
+	stop := make(chan struct{})
+	c.trafficStop = stop
+	c.trafficMu.Unlock()
+
+	if c.OnTraffic == nil {
+		return
+	}
+	var lastU, lastD int64
+	go func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				up, down := c.trafficSnapshot()
+				if up != lastU || down != lastD {
+					lastU, lastD = up, down
+					c.OnTraffic(up, down)
+				}
+			}
+		}
+	}()
+}
+
+// trafficSnapshot 返回当前累计上下行字节数。
+func (c *Client) trafficSnapshot() (int64, int64) {
+	return atomic.LoadInt64(&c.upBytes), atomic.LoadInt64(&c.downBytes)
+}
+
 func (c *Client) Run() {
 	for {
+		if c.isStopped() {
+			return
+		}
 		if err := c.connectOnce(); err != nil {
+			c.emitState("offline", "连接断开: "+err.Error())
 			log.Printf("[client] 连接断开/失败: %v", err)
 		}
-		log.Println("[client] 3 秒后重连...")
+		if c.isStopped() {
+			return
+		}
+		c.emitState("connecting", "3 秒后重连...")
 		time.Sleep(3 * time.Second)
 	}
 }
@@ -62,7 +150,22 @@ func (c *Client) connectOnce() error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	c.mu.Lock()
+	if c.stopped {
+		c.mu.Unlock()
+		conn.Close()
+		return nil
+	}
+	c.conn = conn
+	c.mu.Unlock()
+	defer func() {
+		conn.Close()
+		c.mu.Lock()
+		if c.conn == conn {
+			c.conn = nil
+		}
+		c.mu.Unlock()
+	}()
 	r := bufio.NewReader(conn)
 	w := bufio.NewWriter(conn)
 
@@ -76,6 +179,8 @@ func (c *Client) connectOnce() error {
 	if !m.Ok {
 		return fmt.Errorf("认证失败: %s", m.Message)
 	}
+	c.emitState("online", fmt.Sprintf("已连接，工作端口=%d", m.WorkPort))
+	c.startTrafficStats()
 	c.mu.Lock()
 	c.workPort = m.WorkPort
 	c.p2pPort = m.P2pPort
@@ -194,8 +299,8 @@ func (c *Client) handleNewConn(connID, tunnelID string) {
 		work.Close()
 		return
 	}
-	go core.Pump(local, work, nil, nil) // 本地回包
-	core.Pump(work, local, nil, nil)    // 工作连接 -> 本地
+	go core.Pump(local, work, &c.upBytes, nil) // 本地回包
+	core.Pump(work, local, &c.downBytes, nil) // 工作连接 -> 本地
 	core.CloseBoth(local, work)
 }
 

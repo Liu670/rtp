@@ -23,17 +23,27 @@ jobs:
         run: |
           mkdir -p dist
           LDFLAGS="-s -w"
+          # 说明：cmd/rtps/rtps.syso、cmd/rtpc/rtpc.syso 已随仓库提交，go build 会自动
+          # 将其中的 ICON + VERSIONINFO 资源嵌入 exe（无需 windres）。
+          # Windows 产出两个变体：
+          #   *-windows-*.exe         图形界面版（-H windowsgui，双击无黑窗）
+          #   *-windows-cli-*.exe     命令行版（保留控制台输出，适合调试 / 无桌面）
           # 服务端
           GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtps-linux-amd64        ./cmd/rtps
           GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtps-linux-arm64        ./cmd/rtps
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtps-windows-amd64.exe  ./cmd/rtps
+          GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtps-darwin-amd64       ./cmd/rtps
+          GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtps-darwin-arm64       ./cmd/rtps
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS -H windowsgui" -o dist/rtps-windows-amd64.exe     ./cmd/rtps
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS"                -o dist/rtps-windows-cli-amd64.exe ./cmd/rtps
           # 客户端
           GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-linux-amd64        ./cmd/rtpc
           GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-linux-arm64        ./cmd/rtpc
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-windows-amd64.exe  ./cmd/rtpc
-          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-windows-arm64.exe  ./cmd/rtpc
           GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-darwin-amd64       ./cmd/rtpc
           GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-darwin-arm64       ./cmd/rtpc
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS -H windowsgui" -o dist/rtpc-windows-amd64.exe     ./cmd/rtpc
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS"                -o dist/rtpc-windows-cli-amd64.exe ./cmd/rtpc
+          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS -H windowsgui" -o dist/rtpc-windows-arm64.exe     ./cmd/rtpc
+          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS"                -o dist/rtpc-windows-cli-arm64.exe ./cmd/rtpc
           # 客户端 · 手机端（Android / Termux，纯 Go 零依赖交叉编译）
           GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o dist/rtpc-android-arm64 ./cmd/rtpc
           # 校验文件
