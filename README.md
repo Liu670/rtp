@@ -89,9 +89,25 @@
 
 ### 0. 先下载（不想编译就用现成的）
 
-- **Windows**：到 [Releases](../../releases) 下载 `rtps-windows-amd64.exe`（服务端桌面版）与 `rtpc-windows-amd64.exe`（客户端桌面版），**双击即用，无需任何命令行**；把四个二进制放在同一目录。
+[Releases](../../releases) 里每个版本都提供**按平台打好的分组压缩包**（解压即用，内含该平台的服务端 + 客户端 + 一份 README.txt）和**单个原始文件**（便于脚本化）。
+
+| 压缩包 | 平台 | 内容 |
+|---|---|---|
+| `rtp-windows-amd64.zip` | Windows x64 | 服务端 + 客户端，桌面版 + 命令行版 |
+| `rtp-windows-arm64.zip` | Windows ARM64 | 客户端，桌面版 + 命令行版 |
+| `rtp-linux-amd64.zip` | Linux x64 | 服务端 + 客户端 |
+| `rtp-linux-arm64.zip` | Linux ARM64 | 服务端 + 客户端 |
+| `rtp-macos-amd64.zip` | macOS Intel | 服务端 + 客户端 |
+| `rtp-macos-arm64.zip` | macOS Apple Silicon | 服务端 + 客户端 |
+| `rtp-android.zip` | Android | 原生桌面版 APK + Termux 命令行版 |
+
+只要单个程序的话，直接下原始文件：
+
+- **Windows**：下载 `rtps-windows-amd64.exe`（服务端桌面版）与 `rtpc-windows-amd64.exe`（客户端桌面版），**双击即用，无需任何命令行**；放在同一目录。
 - **Linux / macOS**：下载 `rtps-linux-amd64` / `rtpc-linux-amd64`，`chmod +x` 后按下方命令行步骤运行，用 Web 控制台配置。
 - **Android**：下载 `rtp-android.apk` 安装，或扫[使用文档](使用文档.md)里的二维码。
+
+> `SHA256SUMS.txt` 列出该版本全部文件的 SHA256 校验值，下载后可自行核对。
 
 ### 1. 编译（或在 [Releases](../../releases) 直接下载全平台二进制）
 
