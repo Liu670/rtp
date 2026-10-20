@@ -808,6 +808,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		"rtpc-linux":         true,
 		"rtpc-darwin":        true,
 		"rtpc-android-arm64": true,
+		"rtp-android.apk":    true,
 	}
 	if !allowed[name] {
 		http.Error(w, "not found", http.StatusNotFound)

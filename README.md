@@ -6,6 +6,8 @@
 
 📖 **完整使用文档（服务端 + 客户端操作手册）见 [使用文档.md](./使用文档.md)** —— 含部署、systemd、防火墙、6 类隧道实战、三平台开机自启、故障排查、API 速查。
 
+📦 代码双同步：**[GitHub](https://github.com/Liu670/rtp)** · **[Gitee](https://gitee.com/lovexiaoliu/rtp)**
+
 ---
 
 ## ✨ 特性
@@ -25,7 +27,7 @@
 - **现代化 UI**：玻璃拟态 / 渐变 / 暗·亮主题 / 5 套配色，命令面板（Ctrl+K）、数字键快捷键、搜索过滤、全站元素可点击跳转。
 - **账号密码 + 令牌双鉴权**：sha256 加盐哈希 + HttpOnly 会话 cookie（7 天）；也支持令牌直达。
 - **内置工具箱**：服务端连通性测试（TCP 探测 + 延迟）、配置备份/恢复（JSON 导入导出）、部署命令生成器（Linux/Windows/macOS/systemd 常驻，自动带令牌）。
-- **一键下载客户端**：控制台直接下载 Windows / Linux / macOS / **Android (Termux)** 单文件客户端，手机端可扫文档内二维码直装。
+- **一键下载客户端**：控制台直接下载 Windows / Linux / macOS 客户端；Android 提供**原生图形版 APK**（下载即装、界面配置，扫文档内二维码直装）与 Termux 命令行版。
 - **公告栏**：登录页与控制台顶部展示自定义公告。
 - **Webhook 通知**：支持飞书 / 企业微信 / 钉钉群机器人推送，9 种事件类型（客户端上下线、隧道增删改、P2P 穿透、管理操作）按需订阅，一键发送测试消息。
 
@@ -70,6 +72,8 @@
 
 ```bash
 git clone https://github.com/Liu670/rtp.git && cd rtp
+# 或 Gitee 镜像
+git clone https://gitee.com/lovexiaoliu/rtp.git && cd rtp
 
 # 服务端
 go build -o rtps ./cmd/rtps
