@@ -76,6 +76,9 @@ const (
 	WM_LBUTTONDBLCLK    = 0x0203
 	WM_RBUTTONUP        = 0x0205
 	WM_CONTEXTMENU      = 0x007B
+	WM_SYSCOMMAND       = 0x0112
+	SC_CLOSE            = 0xF060
+	TPM_RETURNCMD       = 0x0100
 
 	// 自绘按钮 / GDI 常量
 	WM_DRAWITEM          = 0x002B
@@ -506,16 +509,15 @@ func (a *App) Show(id int32, on bool) {
 	}
 }
 
-// Append 向多行文本框追加一行（自动滚动到底）。
+// Append 向多行文本框追加一行（自动换行并滚动到底）。
 func (a *App) Append(id int32, line string) {
 	h, ok := a.ctrl[id]
 	if !ok {
 		return
 	}
-	n := len(utf16(line))
-	buf := make([]uint16, n)
-	copy(buf, utf16(line))
-	// EM_SETSEL 到末尾，再 EM_REPLACESEL
+	// 每行以 \r\n 结尾，避免日志首尾相连挤成一行
+	t := line + "\r\n"
+	buf := utf16(t)
 	pSendMessageW.Call(uintptr(h), 0x00B1, ^uintptr(0), ^uintptr(0)) // EM_SETSEL(-1,-1)
 	pSendMessageW.Call(uintptr(h), 0x00C2, 0, uintptr(unsafe.Pointer(&buf[0])))
 	pInvalidateRect.Call(uintptr(h), 0, 0)
@@ -704,6 +706,24 @@ func (a *App) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		}
 		pPostQuitMessage.Call(0)
 		return 0
+	case WM_CONTEXTMENU:
+		// 右键点击窗口标题栏或任务栏按钮时，弹出托盘菜单（含「退出」），
+		// 解决「后台运行时任务栏右键无反应、关不掉」的问题。
+		if wParam == uintptr(a.hwnd) {
+			a.trayMenuPopup()
+			return 0
+		}
+		return 0
+	case WM_SYSCOMMAND:
+		// 任务栏「关闭窗口」等系统命令：有托盘则收起，否则退出。
+		if wParam&0xFFF0 == SC_CLOSE {
+			if a.trayOn {
+				a.Hide()
+			} else {
+				pPostQuitMessage.Call(0)
+			}
+			return 0
+		}
 	case WM_DESTROY:
 		if a.trayOn {
 			nid := tagNOTIFYICONDATA{}
@@ -727,8 +747,10 @@ func (a *App) trayMenuPopup() {
 	var pt point
 	pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 	pSetForegroundWindow.Call(uintptr(a.hwnd))
-	cmd, _, _ := pTrackPopupMenu.Call(hMenu, TPM_RIGHTBUTTON, uintptr(pt.X), uintptr(pt.Y), 0, uintptr(a.hwnd), 0)
-	pPostMessageW.Call(uintptr(a.hwnd), 0x0281, 0, 0) // WM_NULL
+	// TPM_RETURNCMD 让返回值直接是「被选中的菜单项 ID」（否则返回 BOOL，需依赖 WM_COMMAND）。
+	// 末尾 PostMessage(WM_NULL) 释放菜单锁，避免菜单一闪即逝。
+	cmd, _, _ := pTrackPopupMenu.Call(hMenu, TPM_RIGHTBUTTON|TPM_RETURNCMD, uintptr(pt.X), uintptr(pt.Y), 0, uintptr(a.hwnd), 0)
+	pPostMessageW.Call(uintptr(a.hwnd), 0, 0, 0) // WM_NULL
 	pDestroyMenu.Call(hMenu)
 	if cmd != 0 && a.OnCmd != nil {
 		go a.OnCmd(int32(cmd))
@@ -740,11 +762,16 @@ func strPtr(s string) *uint16 {
 	return p
 }
 
-// OpenBrowser 用系统默认浏览器打开链接（内嵌 WebView 不可用时的兜底方案）。
+// OpenBrowser 用系统默认程序打开链接或目录。
+// 注意 ShellExecuteW 的签名是 (hwnd, lpOperation, lpFile, lpParameters, lpDirectory, nShowCmd)，
+// 此前 bug 把 URL 当成了 lpOperation、lpFile 传了 0，导致系统把 http(s)/file 链接当成
+// 「要执行的动词」、目标为空，最终退化成打开当前工作目录。这里把动词固定为 "open"、URL 放到 lpFile。
 func OpenBrowser(url string) {
 	sh := shell32.NewProc("ShellExecuteW")
-	t, _ := syscall.UTF16PtrFromString(url)
-	sh.Call(uintptr(unsafe.Pointer(t)), 0, 0, 0, 0, 1)
+	verb, _ := syscall.UTF16PtrFromString("open")
+	target, _ := syscall.UTF16PtrFromString(url)
+	// ShellExecuteW(hwnd, lpOperation, lpFile, lpParameters, lpDirectory, nShowCmd)
+	sh.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(target)), 0, 0, 1)
 }
 
 // Fatal 用 MessageBox 弹窗显示致命错误。用于替代「双击无反应」式的静默崩溃：

@@ -96,7 +96,9 @@ func runGUI() {
 	cApp.DefButton(cBtnConnect, "连接", 20, y, 100, 30)
 	cApp.Button(cBtnDisconnect, "断开", 128, y, 100, 30)
 	cApp.Label(cStatus, "状态：未连接", 240, y+6, 280, 20)
-	y += 34
+	y += 30
+	cApp.Label(0, "提示：关闭窗口会收进托盘，右键托盘图标或任务栏可退出。", 20, y, 500, 18)
+	y += 26
 
 	cApp.Label(0, "流量", 20, y, 60, 20)
 	cApp.Label(cTraffic, "↑ 0 B    ↓ 0 B", 80, y+2, 240, 20)
