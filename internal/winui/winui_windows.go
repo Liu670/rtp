@@ -214,7 +214,8 @@ func New(title string, w, h int) *App {
 	hCursor, _, _ := pLoadCursorW.Call(0, idcArrow)
 
 	wc := wndClassEx{
-		Style:         0x0008 | 0x0002, // CS_DBLCLKS | CS_HREDRAW
+		Size:          uint32(unsafe.Sizeof(wndClassEx{})), // 必须等于 sizeof(WNDCLASSEXW)，否则注册失败
+		Style:         0x0008 | 0x0002,                     // CS_DBLCLKS | CS_HREDRAW
 		LpfnWndProc:   syscall.NewCallback(a.wndProc),
 		HInstance:     hInst,
 		HIcon:         hIconBig,
@@ -223,7 +224,12 @@ func New(title string, w, h int) *App {
 		LpszClassName: clsName,
 		HIconSm:       hIconSmall,
 	}
-	pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
+	if atom, _, rerr := pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); atom == 0 {
+		// 1410 = ERROR_CLASS_ALREADY_EXISTS（同名类已注册，属正常可忽略）
+		if e, ok := rerr.(syscall.Errno); ok && e != 0 && e != 1410 {
+			panic("注册窗口类失败: " + e.Error())
+		}
+	}
 
 	ti, _ := syscall.UTF16PtrFromString(title)
 	hwnd, _, err := pCreateWindowExW.Call(
