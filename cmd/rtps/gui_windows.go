@@ -69,7 +69,7 @@ func runGUI() {
 	cfg := loadConfig(cfgPath)
 	guiCfg = &cfg
 
-	app := winui.New("rtp 内网穿透服务端", 560, 470)
+	app := winui.New("rtp 内网穿透服务端", 560, 520)
 	guiApp = app
 
 	app.Label(0, "rtp 内网穿透服务端  ·  Windows 桌面界面", 20, 14, 520, 22)
@@ -107,10 +107,13 @@ func runGUI() {
 	app.DefButton(idBtnStart, "启动服务", 20, y, 100, 30)
 	app.Button(idBtnStop, "停止服务", 128, y, 100, 30)
 	app.Label(idStatus, "状态：未启动", 240, y+6, 300, 20)
-	y += 40
+	y += 34
+
+	app.Label(0, "提示：点「Web 控制台」可直接在浏览器打开管理页；关闭窗口会收进托盘，右键托盘图标或任务栏可退出。", 20, y, 520, 18)
+	y += 24
 
 	app.Label(0, "运行日志", 20, y, 100, 20)
-	app.Multi(idLog, "就绪。点击「启动服务」开始运行，首次启动会自动生成配置文件与管理员令牌。", 20, y+20, 530, 118)
+	app.Multi(idLog, "就绪。点击「启动服务」开始运行，首次启动会自动生成配置文件与管理员令牌。", 20, y+20, 520, 150)
 
 	app.OnCmd = onCmd
 	app.Tray("rtp 服务端", []winui.TrayItem{
@@ -178,15 +181,13 @@ func saveFromUI() bool {
 	if cfgPath == "" {
 		cfgPath = "config.json"
 	}
-	webPort, e1 := strconv.Atoi(strings.TrimSpace(guiApp.Text(idWebPort + 1)))
-	ctlPort, e2 := strconv.Atoi(strings.TrimSpace(guiApp.Text(idCtlPort + 1)))
-	workPort, e3 := strconv.Atoi(strings.TrimSpace(guiApp.Text(idWorkPort + 1)))
-	if e1 != nil || e2 != nil || e3 != nil || webPort < 1 || ctlPort < 1 || workPort < 1 {
-		appendLog("端口必须是 1-65535 的整数")
-		return false
-	}
-	if ctlPort == workPort {
-		appendLog("控制端口与工作端口不能相同")
+	base := loadConfig(cfgPath)
+	// 端口：空或非法时回退默认值，保证始终可启动（不再因「0」卡死在启动前）
+	webPort := parsePort(strings.TrimSpace(guiApp.Text(idWebPort+1)), base.WebPort, "Web 控制台端口")
+	ctlPort := parsePort(strings.TrimSpace(guiApp.Text(idCtlPort+1)), base.ControlPort, "隧道控制端口")
+	workPort := parsePort(strings.TrimSpace(guiApp.Text(idWorkPort+1)), base.WorkPort, "工作端口")
+	if webPort == ctlPort || webPort == workPort || ctlPort == workPort {
+		appendLog("三个端口不能两两相同，请调整后再启动")
 		return false
 	}
 
@@ -214,6 +215,19 @@ func saveFromUI() bool {
 	guiMu.Unlock()
 	appendLog("配置已保存: " + abs)
 	return true
+}
+
+// parsePort 解析端口输入：合法返回该值；空或非法则沿用默认值并提示。
+func parsePort(s string, def int, name string) int {
+	if s == "" {
+		return def
+	}
+	p, e := strconv.Atoi(s)
+	if e != nil || p < 1 || p > 65535 {
+		appendLog(name + " 非法（需 1-65535），已使用默认 " + strconv.Itoa(def))
+		return def
+	}
+	return p
 }
 
 func startServer() {
