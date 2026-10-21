@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +51,17 @@ var (
 // GUI 只负责「配置 + 启停 + 一键打开 Web 控制台」，所有隧道/客户端管理仍由
 // Web 控制台完成（服务端与 Web 共用同一套 HTTP 接口，避免两套逻辑分叉）。
 func runGUI() {
+	// 桌面程序以 -H windowsgui 编译（无控制台），任何 panic 都会表现为「双击无反应」。
+	// 这里统一兜底：弹窗提示并把堆栈写入 rtp.crash.log，便于定位。
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 8192)
+			n := runtime.Stack(buf, false)
+			m := fmt.Sprintf("rtp 桌面端启动失败：\n%v\n\n%s", r, string(buf[:n]))
+			winui.CrashLog("rtp.crash.log", m)
+			winui.Fatal("rtp 启动失败", m)
+		}
+	}()
 	cfgPath := "config.json"
 	if len(os.Args) > 2 && os.Args[1] == "-config" {
 		cfgPath = os.Args[2]

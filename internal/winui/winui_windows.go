@@ -9,6 +9,8 @@ package winui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
@@ -605,6 +607,23 @@ func OpenBrowser(url string) {
 	sh := shell32.NewProc("ShellExecuteW")
 	t, _ := syscall.UTF16PtrFromString(url)
 	sh.Call(uintptr(unsafe.Pointer(t)), 0, 0, 0, 0, 1)
+}
+
+// Fatal 用 MessageBox 弹窗显示致命错误。用于替代「双击无反应」式的静默崩溃：
+// 桌面程序以 -H windowsgui 编译（无控制台），一旦 panic 用户看不到任何提示，
+// 因此统一在崩溃时弹窗并把堆栈写入日志文件。
+func Fatal(title, msg string) {
+	mb := user32.NewProc("MessageBoxW")
+	t, _ := syscall.UTF16PtrFromString(title)
+	m, _ := syscall.UTF16PtrFromString(msg)
+	mb.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), 0)
+}
+
+// CrashLog 把致命错误写入 exe 同目录的日志文件，便于排错。
+func CrashLog(name, msg string) {
+	if exe, err := os.Executable(); err == nil {
+		_ = os.WriteFile(filepath.Join(filepath.Dir(exe), name), []byte(msg), 0o644)
+	}
 }
 
 // Sprintf 是 fmt.Sprintf 的简写，供调用方拼接窗口文案。
