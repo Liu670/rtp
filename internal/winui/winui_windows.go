@@ -527,7 +527,10 @@ func (a *App) Run() {
 
 var postQueue []*postItem
 
-func (a *App) wndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
+// wndProc 窗口过程。注意：所有参数必须是指针宽度（uintptr），否则 syscall.NewCallback
+// 在 amd64 上会因参数对齐错误而 panic，且 -H windowsgui 编译下无控制台，表现为
+// 「双击无反应」。故 msg 也用 uintptr（不要用 uint32）。
+func (a *App) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case WM_COMMAND:
 		id := int32(wParam & 0xFFFF)
