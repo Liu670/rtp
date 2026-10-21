@@ -232,7 +232,7 @@ func New(title string, w, h int) *App {
 	}
 
 	ti, _ := syscall.UTF16PtrFromString(title)
-	hwnd, _, err := pCreateWindowExW.Call(
+	hwnd, _, _ := pCreateWindowExW.Call(
 		0,
 		uintptr(unsafe.Pointer(clsName)),
 		uintptr(unsafe.Pointer(ti)),
@@ -242,8 +242,10 @@ func New(title string, w, h int) *App {
 		uintptr(int(a.s(w))+16),
 		uintptr(int(a.s(h))+39),
 		0, 0, hInst, 0)
-	if err != nil {
-		panic("创建窗口失败: " + err.Error())
+	// 注意：syscall.LazyProc.Call 返回的 err 在调用成功时也是 Errno(0)（非 nil），
+	// 因此不能以 err != nil 判定成败；必须检查返回值 hwnd，并改用 GetLastError() 取真实错误。
+	if hwnd == 0 {
+		panic("创建窗口失败: " + syscall.GetLastError().Error())
 	}
 	a.hwnd = hwnd
 	gMain = hwnd
