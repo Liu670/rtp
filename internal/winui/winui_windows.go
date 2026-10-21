@@ -359,7 +359,9 @@ func (a *App) create(class string, id int32, style uint32, text string, x, y, w,
 		uintptr(a.s(x)), uintptr(a.s(y)), uintptr(a.s(w)), uintptr(a.s(h)),
 		a.hwnd, uintptr(id), 0, 0)
 	if hwnd != 0 {
-		pSendMessageW.Call(hwnd, 0x0030, uintptr(a.font), 0) // WM_SETFONT
+		// WM_SETFONT 最后一个参数必须为 1（重绘）：否则多行日志框不会重新计算行高，
+		// 导致追加的文字与上一行重叠（这是「日志文字重叠」的根因）。
+		pSendMessageW.Call(hwnd, 0x0030, uintptr(a.font), 1)
 	}
 	a.ctrl[id] = hwnd
 	return hwnd
@@ -541,9 +543,19 @@ func (a *App) Tray(tip string, menu []TrayItem) {
 	nid.CallbackMessage = WM_APP + 1
 	nid.Flags = NIF_MESSAGE | NIF_ICON | NIF_TIP
 	nid.Icon = a.smallIcon()
-	copy(nid.Tip[:], utf16(tip))
+	setTip(&nid, tip)
 	ret, _, _ := pShellNotifyIconW.Call(NIM_ADD, uintptr(unsafe.Pointer(&nid)))
 	a.trayOn = ret != 0
+}
+
+// setTip 安全地把提示文字写入 NOTIFYICONDATA.Tip：截断到 127 字符并保证以 null 结尾
+// （szTip 为 128 个 WCHAR，含结尾 0）。避免越界写入导致托盘提示中文乱码。
+func setTip(nid *tagNOTIFYICONDATA, tip string) {
+	runes := []rune(tip)
+	if len(runes) > 127 {
+		runes = runes[:127]
+	}
+	copy(nid.Tip[:], utf16(string(runes)))
 }
 
 func (a *App) smallIcon() uintptr {
@@ -564,7 +576,7 @@ func (a *App) Toast(tip string) {
 	nid.ID = 1
 	nid.Flags = NIF_MESSAGE | NIF_ICON | NIF_TIP
 	nid.Icon = a.smallIcon()
-	copy(nid.Tip[:], utf16(tip))
+	setTip(&nid, tip)
 	pShellNotifyIconW.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
 }
 
@@ -766,12 +778,14 @@ func strPtr(s string) *uint16 {
 // 注意 ShellExecuteW 的签名是 (hwnd, lpOperation, lpFile, lpParameters, lpDirectory, nShowCmd)，
 // 此前 bug 把 URL 当成了 lpOperation、lpFile 传了 0，导致系统把 http(s)/file 链接当成
 // 「要执行的动词」、目标为空，最终退化成打开当前工作目录。这里把动词固定为 "open"、URL 放到 lpFile。
-func OpenBrowser(url string) {
+// 返回值：true=成功唤起（找到关联程序）；false=失败（例如本机没有任何浏览器，则不打扰用户）。
+func OpenBrowser(url string) bool {
 	sh := shell32.NewProc("ShellExecuteW")
 	verb, _ := syscall.UTF16PtrFromString("open")
 	target, _ := syscall.UTF16PtrFromString(url)
-	// ShellExecuteW(hwnd, lpOperation, lpFile, lpParameters, lpDirectory, nShowCmd)
-	sh.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(target)), 0, 0, 1)
+	// ShellExecuteW 返回 HINSTANCE：>32 表示执行成功；<=32 表示失败（如未找到关联程序）。
+	r, _, _ := sh.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(target)), 0, 0, 1)
+	return int(r) > 32
 }
 
 // Fatal 用 MessageBox 弹窗显示致命错误。用于替代「双击无反应」式的静默崩溃：
@@ -785,9 +799,11 @@ func Fatal(title, msg string) {
 }
 
 // CrashLog 把致命错误写入 exe 同目录的日志文件，便于排错。
+// 写入 UTF-8 BOM，避免用记事本打开时中文显示为乱码。
 func CrashLog(name, msg string) {
 	if exe, err := os.Executable(); err == nil {
-		_ = os.WriteFile(filepath.Join(filepath.Dir(exe), name), []byte(msg), 0o644)
+		data := append([]byte{0xEF, 0xBB, 0xBF}, []byte(msg)...)
+		_ = os.WriteFile(filepath.Join(filepath.Dir(exe), name), data, 0o644)
 	}
 }
 

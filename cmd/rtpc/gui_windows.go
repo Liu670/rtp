@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,6 +70,9 @@ func runGUI() {
 		}
 	}()
 	cfg := loadClientCfg()
+
+	// 客户端内部日志重定向到界面日志框
+	log.SetOutput(clientLogWriter{})
 
 	cApp = winui.New("rtp 内网穿透客户端", 540, 500)
 	cCfg = cfg
@@ -160,6 +164,20 @@ func defaultClientName() string {
 	return h
 }
 
+// clientLogWriter 把客户端内部 log 输出重定向到桌面端日志框，
+// 让连接失败等错误能在界面上直观看到（否则 -H windowsgui 编译下错误被静默丢弃）。
+type clientLogWriter struct{}
+
+func (clientLogWriter) Write(p []byte) (int, error) {
+	s := strings.TrimRight(string(p), "\n")
+	for _, ln := range strings.Split(s, "\n") {
+		if ln != "" {
+			cLogLine(ln)
+		}
+	}
+	return len(p), nil
+}
+
 func onCmd(id int32) {
 	switch id {
 	case cBtnConnect:
@@ -220,10 +238,35 @@ func connectFromUI() {
 		name:       name,
 		tunnels:    map[string]TunnelConfig{},
 	}
+	// 把客户端真实状态回写到界面：解决「客户端一直是未连接状态」的问题
+	cl.OnState = func(state, detail string) {
+		winui.Post(func() {
+			if cApp == nil {
+				return
+			}
+			switch state {
+			case "online":
+				cApp.SetText(cStatus, "状态：已连接")
+			case "connecting":
+				cApp.SetText(cStatus, "状态：连接中...")
+			case "offline":
+				cApp.SetText(cStatus, "状态：未连接（"+detail+"）")
+			default:
+				cApp.SetText(cStatus, "状态："+detail)
+			}
+		})
+	}
+	// 实时流量回写（↑/↓ 显示）
+	cl.OnTraffic = func(up, down int64) {
+		cMu.Lock()
+		cBytesU, cBytesD = up, down
+		cMu.Unlock()
+	}
 	cMu.Lock()
 	cClient = cl
 	cMu.Unlock()
 
+	cApp.SetText(cStatus, "状态：连接中...")
 	cLogLine(fmt.Sprintf("正在连接 %s:%d，名称=%s", host, port, name))
 	go func() {
 		cl.Run()
@@ -233,6 +276,7 @@ func connectFromUI() {
 		winui.Post(func() {
 			if cApp != nil {
 				cApp.SetText(cStatus, "状态：连接已断开")
+				cApp.SetText(cTraffic, "↑ 0 B    ↓ 0 B")
 			}
 		})
 	}()
