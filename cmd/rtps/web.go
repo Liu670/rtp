@@ -23,6 +23,7 @@ func (s *Server) StartWeb(addr string) {
 	mux.HandleFunc("/api/tunnels", s.handleTunnels)
 	mux.HandleFunc("/api/traffic", s.handleTraffic)
 	mux.HandleFunc("/api/traffic/summary", s.handleTrafficSummary)
+	mux.HandleFunc("/api/traffic/breakdown", s.handleTrafficBreakdown)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/wizard", s.handleWizard)
 	mux.HandleFunc("/api/stream", s.handleStream)
@@ -639,6 +640,23 @@ func (s *Server) handleTrafficSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	rep := s.ledger.Query(q.Get("from"), q.Get("to"), q.Get("gran"))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(rep)
+}
+
+// handleTrafficBreakdown 返回按隧道或客户端维度的区间流量归因。
+// 查询参数：from=YYYY-MM-DD，to=YYYY-MM-DD，by=tunnel|client（默认 tunnel）。
+func (s *Server) handleTrafficBreakdown(w http.ResponseWriter, r *http.Request) {
+	if !s.authed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	q := r.URL.Query()
+	by := q.Get("by")
+	if by != "client" {
+		by = "tunnel"
+	}
+	rep := s.ledger.Breakdown(q.Get("from"), q.Get("to"), by)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(rep)
 }

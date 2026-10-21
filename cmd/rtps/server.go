@@ -320,10 +320,18 @@ func (s *Server) sampler() {
 				continue
 			}
 			t.traffic.Add(dS2c, dC2s) // up=s2c(内网->用户), down=c2s(用户->内网)
+			var clientName string
 			if cs := s.clientOf(t.ClientID); cs != nil {
 				cs.traffic.Add(dS2c, dC2s)
+				clientName = cs.Name
 			}
-			s.ledger.Add(dS2c, dC2s, time.Now()) // 写入服务级每日台账
+			now := time.Now()
+			// 写入服务级每日台账 + 按隧道/客户端维度的归因台账
+			s.ledger.AddTotal(dS2c, dC2s, now)
+			s.ledger.AddTunnel(t.ID, t.Name, t.Proto, t.ClientID, clientName, dS2c, dC2s, now)
+			if t.ClientID != "" {
+				s.ledger.AddClient(t.ClientID, clientName, dS2c, dC2s, now)
+			}
 		}
 		_ = lastC
 	}
