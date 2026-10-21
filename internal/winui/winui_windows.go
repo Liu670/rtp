@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 	"unsafe"
@@ -75,6 +76,17 @@ const (
 	WM_LBUTTONDBLCLK    = 0x0203
 	WM_RBUTTONUP        = 0x0205
 	WM_CONTEXTMENU      = 0x007B
+
+	// 自绘按钮 / GDI 常量
+	WM_DRAWITEM          = 0x002B
+	ODT_BUTTON           = 4
+	ODS_SELECTED         = 0x0001
+	ODS_DISABLED         = 0x0004
+	PS_SOLID             = 0
+	DT_CENTER            = 0x0001
+	DT_VCENTER           = 0x0004
+	DT_SINGLELINE        = 0x0020
+	BS_OWNERDRAW         = 0x000B
 )
 
 var (
@@ -117,6 +129,17 @@ var (
 	pGetDpiForSystem       = user32.NewProc("GetDpiForSystem")
 	pPostQuitMessageProc   = pPostQuitMessage
 	pDispatchMessageWProc  = pDispatchMessageW
+
+	// 自绘按钮所需 GDI / user32 过程
+	pRoundRect       = gdi32.NewProc("RoundRect")
+	pSetBkMode       = gdi32.NewProc("SetBkMode")
+	pSetTextColor    = gdi32.NewProc("SetTextColor")
+	pDrawTextW       = user32.NewProc("DrawTextW")
+	pSelectObject    = gdi32.NewProc("SelectObject")
+	pDeleteObject    = gdi32.NewProc("DeleteObject")
+	pCreatePen       = gdi32.NewProc("CreatePen")
+	pGetWindowTextLengthW = user32.NewProc("GetWindowTextLengthW")
+	pGetWindowTextW  = user32.NewProc("GetWindowTextW")
 )
 
 const (
@@ -153,20 +176,22 @@ type wndClassEx struct {
 
 // App 表示一个顶层窗口。
 type App struct {
-	hwnd     uintptr
-	ctrl     map[int32]uintptr
-	labels   map[int32]string
-	font     uintptr
-	brush    uintptr
-	dpi      float64
-	OnCmd    func(id int32)
-	OnTick   func()
-	OnClose  func() bool // 返回 false 阻止关闭
-	tickMs   uintptr
-	trayTip  string
-	trayOn   bool
-	trayMenu []TrayItem
-	hidden   bool
+	hwnd      uintptr
+	ctrl      map[int32]uintptr
+	labels    map[int32]string
+	font      uintptr
+	brush     uintptr // 主窗口/静态文本背景
+	brushEdit uintptr // 输入框白色背景
+	buttons   map[int32]int // id -> 1=主按钮(实心) 2=次按钮(描边)
+	dpi       float64
+	OnCmd     func(id int32)
+	OnTick    func()
+	OnClose   func() bool // 返回 false 阻止关闭
+	tickMs    uintptr
+	trayTip   string
+	trayOn    bool
+	trayMenu  []TrayItem
+	hidden    bool
 }
 
 // TrayItem 托盘右键菜单项。
@@ -193,16 +218,24 @@ type tagNOTIFYICONDATA struct {
 
 // New 创建并显示一个窗口。w/h 为客户区逻辑尺寸（会自动按 DPI 缩放）。
 func New(title string, w, h int) *App {
+	// 关键：把创建窗口的 goroutine 钉在当前的 OS 线程上。Win32 要求
+	// 窗口的消息循环（GetMessage）必须在「创建窗口的那个线程」上运行，
+	// 否则窗口创建后 Go 调度器可能把 goroutine 挪到别的线程，导致消息收不到、
+	// 窗口「打开即卡死、点哪都没反应」。LockOSThread 可根治此问题。
+	runtime.LockOSThread()
+
 	dpi := 96.0
 	if r, _, err := pGetDpiForSystem.Call(); err == nil && r > 0 {
 		dpi = float64(r)
 	}
 	a := &App{
-		ctrl:   map[int32]uintptr{},
-		labels: map[int32]string{},
-		font:   makeFont(14, dpi),
-		brush:  newBrush(0xF5F7FA),
-		dpi:    dpi,
+		ctrl:      map[int32]uintptr{},
+		labels:    map[int32]string{},
+		font:      makeFont(14, dpi),
+		brush:     newBrush(0xF5F7FA),
+		brushEdit: newBrush(0xFFFFFF),
+		buttons:   map[int32]int{},
+		dpi:       dpi,
 	}
 	gApp = a
 
@@ -350,14 +383,76 @@ func (a *App) Multi(id int32, text string, x, y, w, h int) {
 		text, x, y, w, h)
 }
 
-// Button 创建按钮。
+// Button 创建次按钮（描边风格）。
 func (a *App) Button(id int32, text string, x, y, w, h int) {
-	a.create("BUTTON", id, WS_TABSTOP|BS_PUSHBUTTON, text, x, y, w, h)
+	a.buttons[id] = 2
+	a.create("BUTTON", id, WS_TABSTOP|BS_PUSHBUTTON|BS_OWNERDRAW, text, x, y, w, h)
 }
 
-// DefButton 创建默认按钮（回车触发）。
+// DefButton 创建主按钮（实心强调色，回车触发）。
 func (a *App) DefButton(id int32, text string, x, y, w, h int) {
-	a.create("BUTTON", id, WS_TABSTOP|BS_DEFPUSHBUTTON, text, x, y, w, h)
+	a.buttons[id] = 1
+	a.create("BUTTON", id, WS_TABSTOP|BS_DEFPUSHBUTTON|BS_OWNERDRAW, text, x, y, w, h)
+}
+
+// getWindowTextOf 读取某控件句柄的文本。
+func getWindowTextOf(h uintptr) string {
+	n, _, _ := pGetWindowTextLengthW.Call(h)
+	if n <= 0 {
+		return ""
+	}
+	buf := make([]uint16, n+1)
+	pGetWindowTextW.Call(h, uintptr(unsafe.Pointer(&buf[0])), uintptr(n+1))
+	return syscall.UTF16ToString(buf)
+}
+
+func createPen(style, width int, color uint32) uintptr {
+	h, _, _ := pCreatePen.Call(uintptr(style), uintptr(width), uintptr(color))
+	return h
+}
+
+// drawButton 自绘按钮：圆角矩形 + 居中文字，含正常/按下/禁用三态。
+func (a *App) drawButton(di *drawItemStruct, kind int) {
+	hdc := di.HDC
+	r := di.RcItem
+	state := di.ItemState
+	disabled := state&ODS_DISABLED != 0
+	var fill, border, textCol uint32
+	if kind == 1 { // 主按钮：实心强调蓝
+		switch {
+		case disabled:
+			fill, border, textCol = 0xBFC6CF, 0xBFC6CF, 0xFFFFFF
+		case state&ODS_SELECTED != 0:
+			fill, border, textCol = 0x2257C8, 0x2257C8, 0xFFFFFF
+		default:
+			fill, border, textCol = 0x2F6DF6, 0x2F6DF6, 0xFFFFFF
+		}
+	} else { // 次按钮：白底描边
+		switch {
+		case disabled:
+			fill, border, textCol = 0xE6E9EE, 0xD5DAE1, 0x9AA3AD
+		case state&ODS_SELECTED != 0:
+			fill, border, textCol = 0xDDE7FF, 0x2F6DF6, 0x2F6DF6
+		default:
+			fill, border, textCol = 0xFFFFFF, 0xC9D1DC, 0x2F6DF6
+		}
+	}
+	brush := newBrush(fill)
+	pen := createPen(PS_SOLID, 1, border)
+	pSetBkMode.Call(hdc, 1) // TRANSPARENT
+	pSetTextColor.Call(hdc, uintptr(textCol))
+	oldPen, _, _ := pSelectObject.Call(hdc, uintptr(pen))
+	oldBrush, _, _ := pSelectObject.Call(hdc, uintptr(brush))
+	pRoundRect.Call(hdc, r.Left, r.Top, r.Right, r.Bottom, 10, 10)
+	pSelectObject.Call(hdc, oldBrush)
+	pSelectObject.Call(hdc, oldPen)
+	pDeleteObject.Call(brush)
+	pDeleteObject.Call(pen)
+
+	text := getWindowTextOf(di.HwndItem)
+	tr := r
+	pDrawTextW.Call(hdc, uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(text))),
+		int32(-1), uintptr(unsafe.Pointer(&tr)), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
 // Text 读取控件文本。
@@ -520,6 +615,21 @@ type msgSpec struct {
 	LPrivate uint32
 }
 
+// drawItemStruct 对应 Win32 DRAWITEMSTRUCT（自绘按钮绘图时传入）。
+type rect struct{ Left, Top, Right, Bottom int32 }
+
+type drawItemStruct struct {
+	CtlType    uint32
+	CtlID      uint32
+	ItemID     uint32
+	ItemAction  uint32
+	ItemState  uint32
+	HwndItem   uintptr
+	HDC        uintptr
+	RcItem     rect
+	ItemData   uintptr
+}
+
 // Run 启动消息循环，阻塞直到窗口关闭。
 func (a *App) Run() {
 	var msg msgSpec
@@ -547,6 +657,23 @@ func (a *App) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 			go a.OnCmd(id)
 		}
 		return 0
+	case WM_DRAWITEM:
+		di := (*drawItemStruct)(unsafe.Pointer(lParam))
+		if di.CtlType == ODT_BUTTON {
+			if kind, ok := a.buttons[int32(di.CtlID)]; ok {
+				a.drawButton(di, kind)
+				return 0
+			}
+		}
+		return 0
+	case WM_CTLCOLORSTATIC:
+		pSetBkMode.Call(wParam, 1) // TRANSPARENT
+		pSetTextColor.Call(wParam, uintptr(0x1F2329))
+		return a.brush
+	case WM_CTLCOLOREDIT:
+		pSetBkMode.Call(wParam, 1)
+		pSetTextColor.Call(wParam, uintptr(0x1F2329))
+		return a.brushEdit
 	case WM_TIMER:
 		if a.OnTick != nil {
 			go a.OnTick()
