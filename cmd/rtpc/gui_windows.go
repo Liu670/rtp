@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -56,6 +57,17 @@ type clientCfg struct {
 // runGUI 是 rtpc 的 Windows 桌面界面入口。
 // 双击运行不再出现黑窗一闪而过：缺少参数时直接打开本界面，填完点「连接」即可。
 func runGUI() {
+	// 桌面程序以 -H windowsgui 编译（无控制台），任何 panic 都会表现为「双击无反应」。
+	// 这里统一兜底：弹窗提示并把堆栈写入 rtp.crash.log，便于定位。
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 8192)
+			n := runtime.Stack(buf, false)
+			m := fmt.Sprintf("rtp 桌面端启动失败：\n%v\n\n%s", r, string(buf[:n]))
+			winui.CrashLog("rtp.crash.log", m)
+			winui.Fatal("rtp 启动失败", m)
+		}
+	}()
 	cfg := loadClientCfg()
 
 	cApp = winui.New("rtp 内网穿透客户端", 540, 500)
