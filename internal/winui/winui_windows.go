@@ -443,7 +443,7 @@ func (a *App) drawButton(di *drawItemStruct, kind int) {
 	pSetTextColor.Call(hdc, uintptr(textCol))
 	oldPen, _, _ := pSelectObject.Call(hdc, uintptr(pen))
 	oldBrush, _, _ := pSelectObject.Call(hdc, uintptr(brush))
-	pRoundRect.Call(hdc, r.Left, r.Top, r.Right, r.Bottom, 10, 10)
+	pRoundRect.Call(hdc, uintptr(r.Left), uintptr(r.Top), uintptr(r.Right), uintptr(r.Bottom), 10, 10)
 	pSelectObject.Call(hdc, oldBrush)
 	pSelectObject.Call(hdc, oldPen)
 	pDeleteObject.Call(brush)
@@ -452,7 +452,7 @@ func (a *App) drawButton(di *drawItemStruct, kind int) {
 	text := getWindowTextOf(di.HwndItem)
 	tr := r
 	pDrawTextW.Call(hdc, uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(text))),
-		int32(-1), uintptr(unsafe.Pointer(&tr)), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+		^uintptr(0), uintptr(unsafe.Pointer(&tr)), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
 // Text 读取控件文本。
