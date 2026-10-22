@@ -20,20 +20,23 @@ import (
 )
 
 // 控件 ID
+// 每个标签用基值 id，对应输入框用 id+1。此前 idCfgPath+1=101 与 idWebPort=101 撞号，
+// 导致 Text(idCfgPath+1) 读到标签「Web 控制台端口」而非配置路径，端口/令牌也全读错，
+// 服务端因此一直「未启动」。这里按 10 步进基值，杜绝 id+1 撞号。
 const (
-	idCfgPath = iota + 100
-	idWebPort
-	idCtlPort
-	idWorkPort
-	idToken
-	idStatus
-	idBtnStart
-	idBtnStop
-	idBtnBrowser
-	idBtnOpenDir
-	idBtnCopyToken
-	idBtnSave
-	idLog
+	idCfgPath     = 100
+	idWebPort     = 110
+	idCtlPort     = 120
+	idWorkPort    = 130
+	idToken       = 140
+	idStatus      = 150
+	idBtnStart    = 160
+	idBtnStop     = 170
+	idBtnBrowser  = 180
+	idBtnOpenDir  = 190
+	idBtnCopyToken= 200
+	idBtnSave     = 210
+	idLog         = 220
 )
 
 const (

@@ -19,19 +19,22 @@ import (
 )
 
 // 控件 ID
+// 注意：每个标签用基值 id，对应的输入框用 id+1。为避免「输入框 id+1」与「下一个标签 id」
+// 撞号（此前 cServer+1=101 与 cToken=101 撞号，导致 Text(cServer+1) 读到标签文字
+// 「客户端令牌」而连不上），这里把基值按 10 步进，保证 id+1 永不与其他控件冲突。
 const (
-	cServer = iota + 100
-	cToken
-	cName
-	cStatus
-	cTraffic
-	cBtnConnect
-	cBtnDisconnect
-	cBtnCopy
-	cBtnConfig
-	cBtnAutostart
-	cLog
-	cCfgPath
+	cServer       = 100
+	cToken        = 110
+	cName         = 120
+	cStatus       = 130
+	cTraffic      = 140
+	cBtnConnect   = 150
+	cBtnDisconnect= 160
+	cBtnCopy      = 170
+	cBtnConfig    = 180
+	cBtnAutostart = 190
+	cLog          = 200
+	cCfgPath      = 210
 )
 
 const (
