@@ -206,9 +206,9 @@ func readSocksAddr(conn net.Conn, atyp byte) (string, error) {
 func (s *Server) socksConnect(conn net.Conn, target string) {
 	remote, err := net.DialTimeout("tcp", target, 15*time.Second)
 	if err != nil {
-		rep := socksRepHostUnreach
+		rep := byte(socksRepHostUnreach)
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
-			rep = socksRepHostUnreach
+			rep = byte(socksRepHostUnreach)
 		}
 		socksReply(conn, rep, nil)
 		return
