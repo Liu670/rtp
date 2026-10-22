@@ -205,6 +205,29 @@ rtpc -server <服务器IP>:7000 -token <客户端token> -name home-pc
 
 服务端只做 **NAT 打洞信令**（交换双方 UDP 候选地址），数据在两端之间直接传输，承载于自研可靠流 **RUDP**（序号 + 确认 + 重传 + 按流多路复用）。打洞失败自动回退服务器中转。控制台实时显示穿透状态：等待候选 → 打洞中 → **直连** / 服务器中转。
 
+## 🌐 SOCKS5 局域网网关（把服务端当地域网关）
+
+不想为每台内网设备单独建隧道？服务端内置一个 **SOCKS5 代理**：在 `config.json` 里把 `proxy_port` 设为一个端口（如 `7890`），启动后所有指向 `服务端IP:proxy_port` 的 SOCKS5 流量都会**从服务端本机出口**。于是你在任意地方把 Clash / 本地代理的 SOCKS5 地址填成服务端地址，就相当于「和服务端处在同一局域网」，可以直接访问服务端所在网段的设备（路由器、NAS、摄像头、打印机、`192.168.x.x` / `10.x.x.x` 等）。
+
+**特点**
+- **令牌鉴权**：SOCKS5 用户名/密码 = rtp 令牌（Clash 原生支持），避免变成开放代理。
+- **TCP + UDP 全支持**：`CONNECT` 覆盖 HTTP/SSH/RDP/SMB 等；`UDP ASSOCIATE` 覆盖 DNS-over-proxy、QUIC、部分游戏。
+- **与客户端无关**：有没有客户端连上来都能用；只是单纯给「服务端局域网」开了一扇门。
+
+**Clash 配置示例**
+```yaml
+proxies:
+  - name: "rtp-局域网"
+    type: socks5
+    server: 服务端公网IP或域名
+    port: 7890
+    username: 你的rtp令牌
+    password: 你的rtp令牌   # 用户名或密码任一等于令牌即通过
+```
+之后在 `proxy-groups` / `rules` 里把需要走内网的流量（例如 `192.168.0.0/16`、`10.0.0.0/8`、`DOMAIN-SUFFIX,local`）指向该节点即可。
+
+> 提示：服务端本身需能路由到目标内网（即服务端就跑在那台内网机器或同一网段）。若服务端在公网 VPS 上，则代理出口是 VPS 的网络，访问的是 VPS 侧能连通的设备。防火墙请只对该 `proxy_port` 做必要的入站放行。
+
 ## ⚙️ 配置参考（/etc/rtp.json）
 
 ```json
@@ -214,13 +237,14 @@ rtpc -server <服务器IP>:7000 -token <客户端token> -name home-pc
   "work_port": 7001,
   "web_port": 8080,
   "p2p_port": 7002,
+  "proxy_port": 7890,
   "admin_user": "admin",
   "clients":   [ { "id": "...", "name": "home-pc", "token": "...", "bw_limit_mbps": 0 } ],
   "tunnels":   [ { "id": "...", "name": "rdp", "proto": "tcp", "local_port": 3389, "public_port": 33890, "enabled": true } ]
 }
 ```
 
-服务端启动参数：`-config`（配置路径，默认 `config.json`）、`-control/-work/-web`（端口覆盖）、`-token`（管理令牌覆盖）、`-cli`（强制命令行模式，Windows 下默认走桌面界面）。账号密码哈希由服务端自动管理并在界面修改。全部字段说明见[使用文档](./使用文档.md)。
+服务端启动参数：`-config`（配置路径，默认 `config.json`）、`-control/-work/-web`（端口覆盖）、`-proxy`（SOCKS5 网关端口覆盖，0=关闭）、`-token`（管理令牌覆盖）、`-cli`（强制命令行模式，Windows 下默认走桌面界面）。账号密码哈希由服务端自动管理并在界面修改。全部字段说明见[使用文档](./使用文档.md)。
 
 客户端启动参数：`-server`（服务端 `IP:端口`）、`-token`（客户端令牌）、`-name`（本机名称）、`-config`（本地配置文件）、`-cli`（强制命令行模式）。Windows 下**不带 `-token` 直接双击**会打开桌面界面；带 `-token` 则直接连接。
 
