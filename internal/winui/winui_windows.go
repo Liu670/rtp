@@ -40,6 +40,8 @@ const (
 	BS_PUSHBUTTON       = 0x0000
 
 	SS_LEFT             = 0x0000
+	SS_LEFTNOWORDWRAP   = 0x000C // 中文标签在窄宽下会被按字换行，必须禁用换行
+	SS_NOPREFIX         = 0x0080
 	SS_ENDELLIPSIS      = 0x4000
 
 	WM_DESTROY          = 0x0002
@@ -136,6 +138,7 @@ var (
 	// 自绘按钮所需 GDI / user32 过程
 	pRoundRect       = gdi32.NewProc("RoundRect")
 	pSetBkMode       = gdi32.NewProc("SetBkMode")
+	pSetBkColor      = gdi32.NewProc("SetBkColor")
 	pSetTextColor    = gdi32.NewProc("SetTextColor")
 	pDrawTextW       = user32.NewProc("DrawTextW")
 	pSelectObject    = gdi32.NewProc("SelectObject")
@@ -367,9 +370,15 @@ func (a *App) create(class string, id int32, style uint32, text string, x, y, w,
 	return hwnd
 }
 
-// Label 创建静态文本。id 可传 0（不参与事件）。
+// Label 单行静态文本。禁用自动换行：中文在窄宽下会被按字换行，第二行会盖住下一行的控件
+// （这是「标签文字重叠」的根因）。需要多行的长提示请用 LabelW。
 func (a *App) Label(id int32, text string, x, y, w, h int) {
-	a.create("STATIC", id, SS_LEFT, text, x, y, w, h)
+	a.create("STATIC", id, SS_LEFTNOWORDWRAP|SS_NOPREFIX, text, x, y, w, h)
+}
+
+// LabelW 允许自动换行的静态文本（用于较长的提示语，调用方需给足高度）。
+func (a *App) LabelW(id int32, text string, x, y, w, h int) {
+	a.create("STATIC", id, SS_LEFT|SS_NOPREFIX, text, x, y, w, h)
 }
 
 // Input 创建单行输入框。
@@ -522,7 +531,8 @@ func (a *App) Append(id int32, line string) {
 	buf := utf16(t)
 	pSendMessageW.Call(uintptr(h), 0x00B1, ^uintptr(0), ^uintptr(0)) // EM_SETSEL(-1,-1)
 	pSendMessageW.Call(uintptr(h), 0x00C2, 0, uintptr(unsafe.Pointer(&buf[0])))
-	pInvalidateRect.Call(uintptr(h), 0, 0)
+	pSendMessageW.Call(uintptr(h), 0x00B7, 0, 0) // EM_SCROLLCARET：滚动到最新一行
+	pInvalidateRect.Call(uintptr(h), 0, 1)        // bErase=1，强制擦除背景，避免旧文字残留
 }
 
 // Tick 注册定时回调（毫秒），用于刷新状态。
@@ -685,8 +695,11 @@ func (a *App) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		pSetTextColor.Call(wParam, uintptr(0x1F2329))
 		return a.brush
 	case WM_CTLCOLOREDIT:
-		pSetBkMode.Call(wParam, 1)
+		// 关键：编辑框/多行日志框必须是「不透明」背景。此前设成 TRANSPARENT，追加或滚动时
+		// 旧文字像素不会被擦除，新文字画在旧文字上 → 日志区文字重影、叠字。
 		pSetTextColor.Call(wParam, uintptr(0x1F2329))
+		pSetBkColor.Call(wParam, uintptr(0xFFFFFF))
+		pSetBkMode.Call(wParam, 2) // OPAQUE
 		return a.brushEdit
 	case WM_TIMER:
 		if a.OnTick != nil {

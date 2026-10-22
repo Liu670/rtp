@@ -77,42 +77,43 @@ func runGUI() {
 	// 客户端内部日志重定向到界面日志框
 	log.SetOutput(clientLogWriter{})
 
-	cApp = winui.New("rtp 内网穿透客户端", 540, 500)
+	cApp = winui.New("rtp 内网穿透客户端", 600, 580)
 	cCfg = cfg
 
-	cApp.Label(0, "rtp 内网穿透客户端  ·  Windows 桌面界面", 20, 14, 500, 22)
-	cApp.Label(0, "填写服务端地址与客户端令牌，点「连接」即可接入内网穿透。", 20, 38, 500, 20)
+	cApp.Label(0, "rtp 内网穿透客户端  ·  Windows 桌面界面", 20, 14, 560, 22)
+	cApp.Label(0, "填写服务端地址与客户端令牌，点「连接」即可接入内网穿透。", 20, 40, 560, 20)
 
-	y := 68
-	cApp.Label(cServer, "服务端地址", 20, y+2, 100, 20)
-	cApp.Input(cServer+1, cfg.Server, 120, y, 260, 24)
-	cApp.Label(0, "如 1.2.3.4:7000", 390, y+4, 140, 18)
-	y += 32
+	y := 72
+	cApp.Label(cServer, "服务端地址", 20, y+4, 110, 20)
+	cApp.Input(cServer+1, cfg.Server, 140, y, 280, 26)
+	cApp.Label(0, "如 1.2.3.4:7000", 432, y+6, 150, 18)
+	y += 36
 
-	cApp.Label(cToken, "客户端令牌", 20, y+2, 100, 20)
-	cApp.Password(cToken+1, cfg.Token, 120, y, 260, 24)
-	cApp.Button(cBtnCopy, "复制自配置文件", 388, y, 142, 24)
-	y += 32
+	cApp.Label(cToken, "客户端令牌", 20, y+4, 110, 20)
+	cApp.Password(cToken+1, cfg.Token, 140, y, 280, 26)
+	cApp.Button(cBtnCopy, "从配置文件复制", 430, y, 150, 26)
+	y += 36
 
-	cApp.Label(cName, "本机名称", 20, y+2, 100, 20)
-	cApp.Input(cName+1, cfg.Name, 120, y, 260, 24)
-	cApp.Button(cBtnConfig, "打开目录", 388, y, 80, 24)
-	cApp.Button(cBtnAutostart, "开机自启", 474, y, 66, 24)
+	cApp.Label(cName, "本机名称", 20, y+4, 110, 20)
+	cApp.Input(cName+1, cfg.Name, 140, y, 280, 26)
+	cApp.Button(cBtnConfig, "打开目录", 430, y, 70, 26)
+	cApp.Button(cBtnAutostart, "开机自启", 508, y, 72, 26)
+	y += 44
+
+	cApp.DefButton(cBtnConnect, "连接", 20, y, 110, 32)
+	cApp.Button(cBtnDisconnect, "断开", 138, y, 110, 32)
+	cApp.Label(cStatus, "状态：未连接", 260, y+8, 320, 20)
 	y += 40
 
-	cApp.DefButton(cBtnConnect, "连接", 20, y, 100, 30)
-	cApp.Button(cBtnDisconnect, "断开", 128, y, 100, 30)
-	cApp.Label(cStatus, "状态：未连接", 240, y+6, 280, 20)
-	y += 30
-	cApp.Label(0, "提示：关闭窗口会收进托盘，右键托盘图标或任务栏可退出。", 20, y, 500, 18)
-	y += 26
+	cApp.Label(0, "提示：关闭窗口会收进托盘，右键托盘图标或任务栏可退出。", 20, y, 560, 20)
+	y += 28
 
 	cApp.Label(0, "流量", 20, y, 60, 20)
-	cApp.Label(cTraffic, "↑ 0 B    ↓ 0 B", 80, y+2, 240, 20)
-	y += 26
+	cApp.Label(cTraffic, "↑ 0 B    ↓ 0 B", 80, y+4, 240, 20)
+	y += 28
 
 	cApp.Label(0, "运行日志", 20, y, 100, 20)
-	cApp.Multi(cLog, "就绪。首次使用请到服务端 Web 控制台「客户端」页复制令牌。", 20, y+20, 510, 130)
+	cApp.Multi(cLog, "就绪。首次使用请到服务端 Web 控制台「客户端」页复制令牌。", 20, y+22, 560, 150)
 
 	cApp.OnCmd = onCmd
 	cApp.Tray("rtp 客户端", []winui.TrayItem{
@@ -132,13 +133,35 @@ func loadClientCfg() clientCfg {
 	if data, err := os.ReadFile(clientCfgPath()); err == nil {
 		_ = json.Unmarshal(data, &cfg)
 	}
-	if cfg.Server == "" {
+	// 旧版本因控件 ID 撞号，会把标签「客户端令牌」误存成服务端地址（如 "客户端令牌:7000"）。
+	// 这里校验地址：必须是 host:port 且主机名只含 ASCII，否则回退默认值。
+	if s, ok := cleanServer(cfg.Server); ok {
+		cfg.Server = s
+	} else {
 		cfg.Server = "127.0.0.1:7000"
 	}
 	if cfg.Name == "" {
 		cfg.Name = defaultClientName()
 	}
 	return cfg
+}
+
+// cleanServer 校验并规范化服务端地址；主机名出现非 ASCII（如中文标签）视为脏数据丢弃。
+func cleanServer(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+	host, port, ok := splitServer(s)
+	if !ok || host == "" {
+		return "", false
+	}
+	for _, r := range host {
+		if r > 127 {
+			return "", false
+		}
+	}
+	return host + ":" + strconv.Itoa(port), true
 }
 
 func clientCfgPath() string {

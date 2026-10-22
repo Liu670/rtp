@@ -96,51 +96,51 @@ func runGUI() {
 	// 服务端内部日志（含端口监听失败等）重定向到界面日志框
 	log.SetOutput(guiLogWriter{})
 
-	app := winui.New("rtp 内网穿透服务端", 560, 520)
+	app := winui.New("rtp 内网穿透服务端", 640, 600)
 	guiApp = app
 
-	app.Label(0, "rtp 内网穿透服务端  ·  Windows 桌面界面", 20, 14, 520, 22)
-	app.Label(0, "在这里配置端口并启停服务；隧道与客户端管理请使用 Web 控制台。", 20, 38, 520, 20)
+	app.Label(0, "rtp 内网穿透服务端  ·  Windows 桌面界面", 20, 14, 600, 22)
+	app.Label(0, "在这里配置端口并启停服务；隧道与客户端管理请使用 Web 控制台。", 20, 40, 600, 20)
 
-	y := 68
-	app.Label(idCfgPath, "配置文件", 20, y+2, 100, 20)
-	app.Input(idCfgPath+1, cfgPath, 120, y, 230, 24)
-	app.Button(idBtnOpenDir, "打开目录", 356, y, 84, 24)
-	app.Button(idBtnSave, "保存配置", 446, y, 84, 24)
-	y += 34
+	y := 72
+	app.Label(idCfgPath, "配置文件", 20, y+4, 120, 20)
+	app.Input(idCfgPath+1, cfgPath, 150, y, 250, 26)
+	app.Button(idBtnOpenDir, "打开目录", 408, y, 100, 26)
+	app.Button(idBtnSave, "保存配置", 514, y, 100, 26)
+	y += 38
 
-	app.Label(idWebPort, "Web 控制台端口", 20, y+2, 100, 20)
-	app.Input(idWebPort+1, strconv.Itoa(cfg.WebPort), 120, y, 230, 24)
-	y += 32
+	app.Label(idWebPort, "Web 控制台端口", 20, y+4, 130, 20)
+	app.Input(idWebPort+1, strconv.Itoa(cfg.WebPort), 150, y, 250, 26)
+	y += 36
 
-	app.Label(idCtlPort, "隧道控制端口", 20, y+2, 100, 20)
-	app.Input(idCtlPort+1, strconv.Itoa(cfg.ControlPort), 120, y, 230, 24)
-	y += 32
+	app.Label(idCtlPort, "隧道控制端口", 20, y+4, 130, 20)
+	app.Input(idCtlPort+1, strconv.Itoa(cfg.ControlPort), 150, y, 250, 26)
+	y += 36
 
-	app.Label(idWorkPort, "工作端口", 20, y+2, 100, 20)
-	app.Input(idWorkPort+1, strconv.Itoa(cfg.WorkPort), 120, y, 230, 24)
-	y += 32
+	app.Label(idWorkPort, "工作端口", 20, y+4, 120, 20)
+	app.Input(idWorkPort+1, strconv.Itoa(cfg.WorkPort), 150, y, 250, 26)
+	y += 36
 
-	app.Label(idToken, "管理员令牌", 20, y+2, 100, 20)
+	app.Label(idToken, "管理员令牌", 20, y+4, 120, 20)
 	tok := cfg.AdminToken
 	if tok == "" {
 		tok = "(留空自动生成)"
 	}
-	app.Input(idToken+1, tok, 120, y, 230, 24)
-	app.Button(idBtnCopyToken, "复制", 356, y, 46, 24)
-	app.Button(idBtnBrowser, "Web 控制台", 408, y, 122, 24)
-	y += 40
+	app.Input(idToken+1, tok, 150, y, 250, 26)
+	app.Button(idBtnCopyToken, "复制", 408, y, 70, 26)
+	app.Button(idBtnBrowser, "Web 控制台", 484, y, 130, 26)
+	y += 44
 
-	app.DefButton(idBtnStart, "启动服务", 20, y, 100, 30)
-	app.Button(idBtnStop, "停止服务", 128, y, 100, 30)
-	app.Label(idStatus, "状态：未启动", 240, y+6, 300, 20)
-	y += 34
+	app.DefButton(idBtnStart, "启动服务", 20, y, 110, 32)
+	app.Button(idBtnStop, "停止服务", 138, y, 110, 32)
+	app.Label(idStatus, "状态：未启动", 260, y+8, 360, 20)
+	y += 42
 
-	app.Label(0, "提示：点「Web 控制台」可直接在浏览器打开管理页；关闭窗口会收进托盘，右键托盘图标或任务栏可退出。", 20, y, 520, 18)
-	y += 24
+	app.LabelW(0, "提示：点「Web 控制台」可直接在浏览器打开管理页；关闭窗口会收进托盘，右键托盘图标或任务栏可退出。", 20, y, 600, 34)
+	y += 42
 
 	app.Label(0, "运行日志", 20, y, 100, 20)
-	app.Multi(idLog, "就绪。点击「启动服务」开始运行，首次启动会自动生成配置文件与管理员令牌。", 20, y+20, 520, 150)
+	app.Multi(idLog, "就绪。点击「启动服务」开始运行，首次启动会自动生成配置文件与管理员令牌。", 20, y+22, 600, 170)
 
 	app.OnCmd = onCmd
 	app.Tray("rtp 服务端", []winui.TrayItem{
@@ -202,7 +202,7 @@ func tick() {
 	if ready {
 		winui.Post(func() {
 			if guiApp != nil {
-				guiApp.SetText(idStatus, fmt.Sprintf("状态：运行中   Web: http://127.0.0.1:%d/", port))
+				guiApp.SetText(idStatus, fmt.Sprintf("状态：运行中（端口 %d）", port))
 			}
 		})
 		return
@@ -336,7 +336,7 @@ func startServer() {
 		if ok {
 			winui.Post(func() {
 				if guiApp != nil {
-					guiApp.SetText(idStatus, fmt.Sprintf("状态：运行中   Web: http://127.0.0.1:%d/", cfg.WebPort))
+					guiApp.SetText(idStatus, fmt.Sprintf("状态：运行中（端口 %d）", cfg.WebPort))
 				}
 			})
 			appendLog("服务已启动，正在尝试自动打开浏览器...")
