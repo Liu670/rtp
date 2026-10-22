@@ -771,11 +771,15 @@ func (a *App) trayMenuPopup() {
 	}
 	var pt point
 	pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	// 关键：必须在 TrackPopupMenu 之前把本窗口置为前台，否则菜单会因「首个鼠标事件被吞掉」而一闪即逝。
+	// 此处是响应托盘/任务栏的用户点击，属于用户主动输入，SetForegroundWindow 通常可成功（即便主窗口处于隐藏态）。
 	pSetForegroundWindow.Call(uintptr(a.hwnd))
-	// TPM_RETURNCMD 让返回值直接是「被选中的菜单项 ID」（否则返回 BOOL，需依赖 WM_COMMAND）。
-	// 末尾 PostMessage(WM_NULL) 释放菜单锁，避免菜单一闪即逝。
-	cmd, _, _ := pTrackPopupMenu.Call(hMenu, TPM_RIGHTBUTTON|TPM_RETURNCMD, uintptr(pt.X), uintptr(pt.Y), 0, uintptr(a.hwnd), 0)
-	pPostMessageW.Call(uintptr(a.hwnd), 0, 0, 0) // WM_NULL
+	// 必须用 TPM_LEFTBUTTON（即只保留 TPM_RETURNCMD，去掉 TPM_RIGHTBUTTON）：
+	// 右键托盘图标时系统已发出 WM_RBUTTONUP（右键已释放），若仍用 TPM_RIGHTBUTTON，TrackPopupMenu 会把这次
+	// 右键释放当成「取消/退出」触发，导致菜单一闪即逝、表现为「右键点了没反应、后台关不掉」。
+	// 改为左键选择（右键弹出、左键点项）才是 Windows 托盘菜单的标准且可靠行为。
+	cmd, _, _ := pTrackPopupMenu.Call(hMenu, TPM_RETURNCMD, uintptr(pt.X), uintptr(pt.Y), 0, uintptr(a.hwnd), 0)
+	pPostMessageW.Call(uintptr(a.hwnd), 0, 0, 0) // WM_NULL：释放菜单的内部捕获，避免后续点击被吞
 	pDestroyMenu.Call(hMenu)
 	if cmd != 0 && a.OnCmd != nil {
 		go a.OnCmd(int32(cmd))
