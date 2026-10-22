@@ -37,6 +37,7 @@ const (
 	idBtnCopyToken= 200
 	idBtnSave     = 210
 	idLog         = 220
+	idProxyPort   = 230
 )
 
 const (
@@ -136,6 +137,11 @@ func runGUI() {
 	app.Button(idBtnBrowser, "Web 控制台", 484, y, 130, 26)
 	y += 44
 
+	app.Label(idProxyPort, "SOCKS5 网关端口", 20, y+4, 140, 20)
+	app.Input(idProxyPort+1, strconv.Itoa(cfg.ProxyPort), 150, y, 250, 26)
+	app.LabelW(0, "（0=关闭；填端口后，Clash 填 本机IP:此端口+令牌 即可当局域网网关）", 408, y+4, 220, 20)
+	y += 36
+
 	app.DefButton(idBtnStart, "启动服务", 20, y, 110, 32)
 	app.Button(idBtnStop, "停止服务", 138, y, 110, 32)
 	app.Label(idStatus, "状态：未启动", 260, y+8, 360, 20)
@@ -228,8 +234,13 @@ func saveFromUI() bool {
 	webPort := parsePort(strings.TrimSpace(guiApp.Text(idWebPort+1)), base.WebPort, "Web 控制台端口")
 	ctlPort := parsePort(strings.TrimSpace(guiApp.Text(idCtlPort+1)), base.ControlPort, "隧道控制端口")
 	workPort := parsePort(strings.TrimSpace(guiApp.Text(idWorkPort+1)), base.WorkPort, "工作端口")
+	proxyPort := parsePort(strings.TrimSpace(guiApp.Text(idProxyPort+1)), base.ProxyPort, "SOCKS5 网关端口")
 	if webPort == ctlPort || webPort == workPort || ctlPort == workPort {
 		appendLog("三个端口不能两两相同，请调整后再启动")
+		return false
+	}
+	if proxyPort != 0 && (proxyPort == webPort || proxyPort == ctlPort || proxyPort == workPort) {
+		appendLog("SOCKS5 网关端口不能与其他端口相同，请调整后再启动")
 		return false
 	}
 
@@ -237,6 +248,7 @@ func saveFromUI() bool {
 	cfg.WebPort = webPort
 	cfg.ControlPort = ctlPort
 	cfg.WorkPort = workPort
+	cfg.ProxyPort = proxyPort
 	if t := strings.TrimSpace(guiApp.Text(idToken + 1)); t != "" && t != "(留空自动生成)" {
 		cfg.AdminToken = t
 	}
@@ -289,7 +301,11 @@ func startServer() {
 	abs, _ := filepath.Abs(cfgPath)
 
 	// 端口预检：被占用则直接提示，避免服务内部 log.Fatalf 直接退出整个桌面程序（无任何报错）
-	if busy, which := checkPortBusy(cfg.ControlPort, cfg.WorkPort, cfg.WebPort); busy {
+	precheck := []int{cfg.ControlPort, cfg.WorkPort, cfg.WebPort}
+	if cfg.ProxyPort > 0 {
+		precheck = append(precheck, cfg.ProxyPort)
+	}
+	if busy, which := checkPortBusy(precheck...); busy {
 		appendLog(fmt.Sprintf("端口 %s 被占用，无法启动；请修改端口或关闭占用程序后重试", which))
 		winui.Post(func() {
 			if guiApp != nil {
@@ -311,8 +327,8 @@ func startServer() {
 			guiApp.SetText(idStatus, "状态：启动中...")
 		}
 	})
-	appendLog(fmt.Sprintf("启动中...  控制端口=%d  工作端口=%d  Web端口=%d  P2P端口=%d",
-		cfg.ControlPort, cfg.WorkPort, cfg.WebPort, cfg.P2pPort))
+	appendLog(fmt.Sprintf("启动中...  控制端口=%d  工作端口=%d  Web端口=%d  P2P端口=%d  SOCKS5端口=%d",
+		cfg.ControlPort, cfg.WorkPort, cfg.WebPort, cfg.P2pPort, cfg.ProxyPort))
 	appendLog("管理员令牌: " + cfg.AdminToken)
 
 	go srv.Run()

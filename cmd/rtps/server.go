@@ -118,6 +118,8 @@ type Server struct {
 	ledger *TrafficLedger
 	// 生命周期标记（GUI 模式下用于启停）
 	running bool
+	// SOCKS5 局域网网关监听（ProxyPort>0 时启用）
+	socksLn net.Listener
 }
 
 func NewServer(cfg Config, cfgPath string) *Server {
@@ -263,6 +265,11 @@ func (s *Server) Stop() {
 	for _, t := range tunnels {
 		t.stop()
 	}
+	// 关闭 SOCKS5 局域网网关监听（正在进行的连接会随 NAT/隧道自然结束）
+	if s.socksLn != nil {
+		_ = s.socksLn.Close()
+		s.socksLn = nil
+	}
 	core.LogEvent("admin", "warn", "服务端已停止（GUI 操作）")
 }
 
@@ -287,6 +294,9 @@ func (s *Server) Run() {
 	}
 	if s.cfg.P2pPort > 0 {
 		go s.startP2PListener(fmt.Sprintf(":%d", s.cfg.P2pPort))
+	}
+	if s.cfg.ProxyPort > 0 {
+		go s.serveSOCKS5(fmt.Sprintf(":%d", s.cfg.ProxyPort))
 	}
 
 	s.mu.Lock()

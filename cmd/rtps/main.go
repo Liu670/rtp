@@ -17,6 +17,7 @@ func main() {
 		workPort    = flag.Int("work", 0, "工作端口(覆盖配置)")
 		webPort     = flag.Int("web", 0, "Web 端口(覆盖配置)")
 		token       = flag.String("token", "", "管理员 token(覆盖配置)")
+		proxyPort   = flag.Int("proxy", 0, "SOCKS5 局域网网关端口(覆盖配置，0=关闭)")
 		cliMode     = flag.Bool("cli", false, "命令行模式（不启动桌面界面，适合服务器 / 无桌面环境）")
 	)
 	flag.Parse()
@@ -42,6 +43,9 @@ func main() {
 	if *webPort != 0 {
 		cfg.WebPort = *webPort
 	}
+	if *proxyPort != 0 {
+		cfg.ProxyPort = *proxyPort
+	}
 	if cfg.AdminToken == "" {
 		cfg.AdminToken = core.RandID()
 	}
@@ -49,7 +53,7 @@ func main() {
 	s := NewServer(cfg, *cfgPath)
 	s.saveConfig()
 	log.Printf("管理员 token: %s", cfg.AdminToken)
-	log.Printf("控制端口: %d  工作端口: %d  Web端口: %d", cfg.ControlPort, cfg.WorkPort, cfg.WebPort)
+	log.Printf("控制端口: %d  工作端口: %d  Web端口: %d  SOCKS5网关端口: %d", cfg.ControlPort, cfg.WorkPort, cfg.WebPort, cfg.ProxyPort)
 	log.Printf("Web 控制台: http://<本机IP>:%d/", cfg.WebPort)
 	s.Run()
 }

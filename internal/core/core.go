@@ -100,6 +100,7 @@ type Config struct {
 	HttpPort    int            `json:"http_port"`
 	HttpsPort   int            `json:"https_port"`
 	P2pPort     int            `json:"p2p_port"`
+	ProxyPort   int            `json:"proxy_port"` // SOCKS5 局域网网关端口（0=关闭）
 	BaseDomain  string         `json:"base_domain"`
 	AdminUser     string `json:"admin_user"`      // 管理后台账号
 	AdminSalt     string `json:"admin_salt"`      // 密码盐
