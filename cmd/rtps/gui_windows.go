@@ -86,6 +86,11 @@ func runGUI() {
 			winui.Fatal("rtp 启动失败", m)
 		}
 	}()
+	// 单实例：若已有一个 GUI 在运行（收在托盘也算），把旧实例唤到前台并直接退出本进程，
+	// 避免再生成第二个托盘图标 / 第二个同名进程。
+	if !winui.SingleInstance("server") {
+		return
+	}
 	cfgPath := "config.json"
 	if len(os.Args) > 2 && os.Args[1] == "-config" {
 		cfgPath = os.Args[2]

@@ -129,6 +129,8 @@ var (
 	pDestroyMenu           = user32.NewProc("DestroyMenu")
 	pGetCursorPos          = user32.NewProc("GetCursorPos")
 	pDestroyIcon           = user32.NewProc("DestroyIcon")
+	pCreateMutexW          = kernel32.NewProc("CreateMutexW")
+	pFindWindowW           = user32.NewProc("FindWindowW")
 	pEndPaintDummy         = user32.NewProc("GetWindowRect")
 	pShowWindowAsync       = pShowWindow
 	pGetDpiForSystem       = user32.NewProc("GetDpiForSystem")
@@ -162,6 +164,7 @@ var (
 	gMain       uintptr
 	gApp        *App
 	postMessage = syscall.NewLazyDLL("user32.dll").NewProc("PostMessageW")
+	gMutex      uintptr // 单实例互斥量句柄，常驻直到进程退出
 )
 
 // wndClassEx 对应 Win32 WNDCLASSEX。
@@ -628,6 +631,35 @@ func Post(fn func()) {
 
 type postItem struct{ fn func() }
 
+// SingleInstance 实现单实例：同一 appID 只允许一个 GUI 进程存在。
+// 返回 true 表示「本进程是第一个实例，可以继续」；
+// 返回 false 表示「已经有一个实例在运行」，并已把那个实例的主窗口唤起到前台，调用方应直接退出。
+//
+// 用途：用户把窗口「关进托盘」后再次双击 exe，不应再生成一个新进程（否则托盘里出现两个图标、
+// 任务管理器里出现多个同名进程）。本函数用命名互斥量检测已有实例，命中后通过 WM_APP+3 让旧实例显示出来。
+func SingleInstance(appID string) bool {
+	name, _ := syscall.UTF16PtrFromString("Global\\rtp-gui-" + appID)
+	h, _, err := pCreateMutexW.Call(0, 1, uintptr(unsafe.Pointer(name)))
+	gMutex = h
+	if h == 0 {
+		return true // 无法判断（极少见），放行
+	}
+	if e, ok := err.(syscall.Errno); ok && e == 0xB7 { // ERROR_ALREADY_EXISTS = 183
+		activateExisting()
+		return false
+	}
+	return true
+}
+
+// activateExisting 找到已存在的同名 GUI 窗口并让它显示到前台（与 wndProc 的 WM_APP+3 配合）。
+func activateExisting() {
+	cls, _ := syscall.UTF16PtrFromString("RtpWinUIClass")
+	hwnd, _, _ := pFindWindowW.Call(uintptr(unsafe.Pointer(cls)), 0)
+	if hwnd != 0 {
+		pPostMessageW.Call(hwnd, WM_APP+3, 0, 0)
+	}
+}
+
 // msgSpec 对应 Win32 MSG。
 type msgSpec struct {
 	Hwnd     uintptr
@@ -721,6 +753,10 @@ func (a *App) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 			p.fn()
 		}
 		return 0
+	case WM_APP + 3:
+		// 由另一个实例（SingleInstance 命中）发来：把本窗口从托盘唤起到前台
+		a.Show2()
+		return 0
 	case WM_CLOSE:
 		if a.trayOn {
 			a.Hide()
@@ -771,14 +807,13 @@ func (a *App) trayMenuPopup() {
 	}
 	var pt point
 	pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
-	// 关键：必须在 TrackPopupMenu 之前把本窗口置为前台，否则菜单会因「首个鼠标事件被吞掉」而一闪即逝。
-	// 此处是响应托盘/任务栏的用户点击，属于用户主动输入，SetForegroundWindow 通常可成功（即便主窗口处于隐藏态）。
+	// 把本窗口置为前台（仅当主窗口可见时有效；隐藏态下会失败，但下面改用 NULL owner 已规避该问题）。
 	pSetForegroundWindow.Call(uintptr(a.hwnd))
-	// 必须用 TPM_LEFTBUTTON（即只保留 TPM_RETURNCMD，去掉 TPM_RIGHTBUTTON）：
-	// 右键托盘图标时系统已发出 WM_RBUTTONUP（右键已释放），若仍用 TPM_RIGHTBUTTON，TrackPopupMenu 会把这次
-	// 右键释放当成「取消/退出」触发，导致菜单一闪即逝、表现为「右键点了没反应、后台关不掉」。
-	// 改为左键选择（右键弹出、左键点项）才是 Windows 托盘菜单的标准且可靠行为。
-	cmd, _, _ := pTrackPopupMenu.Call(hMenu, TPM_RETURNCMD, uintptr(pt.X), uintptr(pt.Y), 0, uintptr(a.hwnd), 0)
+	// 关键改动：菜单的 owner 传 NULL（0）而非本窗口句柄。
+	// 此程序关闭后会「收进托盘」——主窗口处于隐藏态，SetForegroundWindow 必然失败；若仍把隐藏窗口当 owner，
+	// TrackPopupMenu 会因「首个鼠标事件被吞」而一闪即逝，表现为「右键点了没反应 / 第二次点就弹不出来 / 关不掉」。
+	// 用 NULL owner 后菜单成为独立窗口、自行管理输入，彻底摆脱该问题。右键弹出、左键选择（TPM_RETURNCMD）。
+	cmd, _, _ := pTrackPopupMenu.Call(hMenu, TPM_RETURNCMD, uintptr(pt.X), uintptr(pt.Y), 0, 0, 0)
 	pPostMessageW.Call(uintptr(a.hwnd), 0, 0, 0) // WM_NULL：释放菜单的内部捕获，避免后续点击被吞
 	pDestroyMenu.Call(hMenu)
 	if cmd != 0 && a.OnCmd != nil {
