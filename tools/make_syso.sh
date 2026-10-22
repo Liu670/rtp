@@ -39,11 +39,11 @@ BEGIN
     BLOCK "080404B0"
     BEGIN
       VALUE "CompanyName", "rtp"
-      VALUE "FileDescription", "rtp 内网穿透服务端"
+      VALUE "FileDescription", "rtp Intranet Penetration Server"
       VALUE "FileVersion", "$VERSION"
       VALUE "InternalName", "rtps"
       VALUE "OriginalFilename", "rtps.exe"
-      VALUE "ProductName", "rtp 内网穿透"
+      VALUE "ProductName", "rtp Intranet Penetration"
       VALUE "ProductVersion", "$VERSION"
     END
   END
@@ -68,11 +68,11 @@ BEGIN
     BLOCK "080404B0"
     BEGIN
       VALUE "CompanyName", "rtp"
-      VALUE "FileDescription", "rtp 内网穿透客户端"
+      VALUE "FileDescription", "rtp Intranet Penetration Client"
       VALUE "FileVersion", "$VERSION"
       VALUE "InternalName", "rtpc"
       VALUE "OriginalFilename", "rtpc.exe"
-      VALUE "ProductName", "rtp 内网穿透"
+      VALUE "ProductName", "rtp Intranet Penetration"
       VALUE "ProductVersion", "$VERSION"
     END
   END
