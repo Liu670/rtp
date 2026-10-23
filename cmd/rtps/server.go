@@ -118,8 +118,12 @@ type Server struct {
 	ledger *TrafficLedger
 	// 生命周期标记（GUI 模式下用于启停）
 	running bool
-	// SOCKS5 局域网网关监听（ProxyPort>0 时启用）
+	// SOCKS5 局域网网关监听（ProxyEnabled 且 ProxyPort>0 时启用）
 	socksLn net.Listener
+	// HTTP 代理网关监听（ProxyEnabled 且 ProxyHTTPPort>0 时启用）
+	httpLn net.Listener
+	// 代理网关实时统计（连接明细 / 来源 IP / 出入流量）
+	px *proxyStats
 }
 
 func NewServer(cfg Config, cfgPath string) *Server {
@@ -138,6 +142,7 @@ func NewServer(cfg Config, cfgPath string) *Server {
 		sessions:      map[string]sessionInfo{},
 		startTime:     time.Now(),
 		ledger:        newLedger(cfgPath),
+		px:            newProxyStats(),
 	}
 	s.registerWebhookHook()
 	return s
@@ -197,6 +202,13 @@ func loadConfig(path string) Config {
 	cfg := Config{ControlPort: 7000, WorkPort: 7001, WebPort: 8080}
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &cfg)
+		// 旧版本兼容：配置里没有 proxy_enabled 字段但已配置 proxy_port 时，视为已开启
+		var raw map[string]json.RawMessage
+		if json.Unmarshal(data, &raw) == nil {
+			if _, ok := raw["proxy_enabled"]; !ok && cfg.ProxyPort > 0 {
+				cfg.ProxyEnabled = true
+			}
+		}
 	}
 	if cfg.ControlPort == 0 {
 		cfg.ControlPort = 7000
@@ -265,12 +277,73 @@ func (s *Server) Stop() {
 	for _, t := range tunnels {
 		t.stop()
 	}
-	// 关闭 SOCKS5 局域网网关监听（正在进行的连接会随 NAT/隧道自然结束）
+	// 关闭 SOCKS5 / HTTP 代理网关监听（正在进行的连接会随 NAT/隧道自然结束）
 	if s.socksLn != nil {
 		_ = s.socksLn.Close()
 		s.socksLn = nil
 	}
+	if s.httpLn != nil {
+		_ = s.httpLn.Close()
+		s.httpLn = nil
+	}
 	core.LogEvent("admin", "warn", "服务端已停止（GUI 操作）")
+}
+
+// applyProxyConfig 按当前 cfg 启停代理网关（SOCKS5 / HTTP）。可在运行中反复调用：
+// 端口或开关变化时先关旧监听再起新监听，实现「保存即生效」。
+func (s *Server) applyProxyConfig() {
+	s.mu.Lock()
+	socksOn := s.cfg.ProxyEnabled && s.cfg.ProxyPort > 0
+	httpOn := s.cfg.ProxyEnabled && s.cfg.ProxyHTTPPort > 0
+	socksAddr := fmt.Sprintf(":%d", s.cfg.ProxyPort)
+	httpAddr := fmt.Sprintf(":%d", s.cfg.ProxyHTTPPort)
+	var stopSocks, stopHTTP net.Listener
+	startSocks := socksOn && (s.socksLn == nil || s.socksLn.Addr().String() != socksAddr)
+	startHTTP := httpOn && (s.httpLn == nil || s.httpLn.Addr().String() != httpAddr)
+	if s.socksLn != nil && (!socksOn || s.socksLn.Addr().String() != socksAddr) {
+		stopSocks = s.socksLn
+		s.socksLn = nil
+	}
+	if s.httpLn != nil && (!httpOn || s.httpLn.Addr().String() != httpAddr) {
+		stopHTTP = s.httpLn
+		s.httpLn = nil
+	}
+	s.mu.Unlock()
+
+	if stopSocks != nil {
+		_ = stopSocks.Close()
+		core.LogEvent("admin", "info", "SOCKS5 网关已停止")
+	}
+	if stopHTTP != nil {
+		_ = stopHTTP.Close()
+		core.LogEvent("admin", "info", "HTTP 代理已停止")
+	}
+	if startSocks {
+		go s.serveSOCKS5(socksAddr)
+	}
+	if startHTTP {
+		go s.serveHTTPProxy(httpAddr)
+	}
+}
+
+// proxyCreds 代理网关鉴权凭据：未自定义时回退为管理员令牌
+func (s *Server) proxyCreds() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, p := s.cfg.ProxyUser, s.cfg.ProxyPass
+	if u == "" {
+		u = s.cfg.AdminToken
+	}
+	if p == "" {
+		p = s.cfg.AdminToken
+	}
+	return u, p
+}
+
+// proxyAuthOK 校验代理网关的账号密码（用户名/密码按配置精确匹配，支持颠倒填写）
+func (s *Server) proxyAuthOK(user, pass string) bool {
+	u, p := s.proxyCreds()
+	return (user == u && pass == p) || (user == p && pass == u)
 }
 
 func (s *Server) Run() {
@@ -295,9 +368,8 @@ func (s *Server) Run() {
 	if s.cfg.P2pPort > 0 {
 		go s.startP2PListener(fmt.Sprintf(":%d", s.cfg.P2pPort))
 	}
-	if s.cfg.ProxyPort > 0 {
-		go s.serveSOCKS5(fmt.Sprintf(":%d", s.cfg.ProxyPort))
-	}
+	// 代理网关（SOCKS5 / HTTP）：按配置启停，之后可在运行中通过 Web 热更新
+	s.applyProxyConfig()
 
 	s.mu.Lock()
 	for _, tc := range s.cfg.Tunnels {

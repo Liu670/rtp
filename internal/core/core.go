@@ -100,7 +100,11 @@ type Config struct {
 	HttpPort    int            `json:"http_port"`
 	HttpsPort   int            `json:"https_port"`
 	P2pPort     int            `json:"p2p_port"`
-	ProxyPort   int            `json:"proxy_port"` // SOCKS5 局域网网关端口（0=关闭）
+	ProxyEnabled  bool   `json:"proxy_enabled"`   // 代理网关总开关
+	ProxyPort     int    `json:"proxy_port"`      // SOCKS5 网关端口（0=关闭）
+	ProxyHTTPPort int    `json:"proxy_http_port"` // HTTP 代理端口（0=关闭，默认关闭）
+	ProxyUser     string `json:"proxy_user"`      // 网关鉴权用户名（空=使用管理员令牌）
+	ProxyPass     string `json:"proxy_pass"`      // 网关鉴权密码（空=使用管理员令牌）
 	BaseDomain  string         `json:"base_domain"`
 	AdminUser     string `json:"admin_user"`      // 管理后台账号
 	AdminSalt     string `json:"admin_salt"`      // 密码盐

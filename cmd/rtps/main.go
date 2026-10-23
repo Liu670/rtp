@@ -45,6 +45,7 @@ func main() {
 	}
 	if *proxyPort != 0 {
 		cfg.ProxyPort = *proxyPort
+		cfg.ProxyEnabled = true
 	}
 	if cfg.AdminToken == "" {
 		cfg.AdminToken = core.RandID()

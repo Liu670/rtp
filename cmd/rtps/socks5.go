@@ -154,13 +154,12 @@ func (s *Server) socksAuth(conn net.Conn) bool {
 	if _, err := io.ReadFull(conn, passwd); err != nil {
 		return false
 	}
-	ok := s.validToken(string(uname)) || s.validToken(string(passwd))
+	ok := s.proxyAuthOK(string(uname), string(passwd))
 	if ok {
 		_, _ = conn.Write([]byte{socksAuthVer, socksAuthOK})
-		core.LogEvent("admin", "ok", "SOCKS5 鉴权成功")
 	} else {
 		_, _ = conn.Write([]byte{socksAuthVer, 0x01})
-		log.Printf("[socks5] 鉴权失败（令牌无效）")
+		log.Printf("[socks5] 鉴权失败（账号或密码错误） from %s", conn.RemoteAddr())
 	}
 	return ok
 }
@@ -202,7 +201,7 @@ func readSocksAddr(conn net.Conn, atyp byte) (string, error) {
 	}
 }
 
-// socksConnect 处理 CONNECT：从服务端本机拨号到目标并双向透传。
+// socksConnect 处理 CONNECT：从服务端本机拨号到目标并双向透传（含流量统计）。
 func (s *Server) socksConnect(conn net.Conn, target string) {
 	remote, err := net.DialTimeout("tcp", target, 15*time.Second)
 	if err != nil {
@@ -219,10 +218,13 @@ func (s *Server) socksConnect(conn net.Conn, target string) {
 
 	socksReply(conn, socksRepOK, nil)
 
+	id, upC, downC := s.px.openConn(hostOnly(conn.RemoteAddr().String()), target, "socks5")
+	defer s.px.closeConn(id)
+
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); core.Pump(remote, conn, nil, nil) }()
-	go func() { defer wg.Done(); core.Pump(conn, remote, nil, nil) }()
+	go func() { defer wg.Done(); core.Pump(remote, conn, upC, nil) }()
+	go func() { defer wg.Done(); core.Pump(conn, remote, downC, nil) }()
 	wg.Wait()
 }
 

@@ -28,6 +28,8 @@ func (s *Server) StartWeb(addr string) {
 	mux.HandleFunc("/api/wizard", s.handleWizard)
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/proxy", s.handleProxy)
+	mux.HandleFunc("/api/proxy/clash", s.handleProxyClash)
 	mux.HandleFunc("/api/client_cmd", s.handleClientCmd)
 	mux.HandleFunc("/api/download", s.handleDownload)
 	// 账号密码鉴权
@@ -869,6 +871,219 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+name+"\"")
 	http.ServeFile(w, r, p)
+}
+
+// ---------- 代理网关（SOCKS5 / HTTP） ----------
+
+// handleProxy GET 返回代理配置+运行状态+实时统计；PUT 保存配置并热生效。
+func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
+	if !s.authed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, s.proxyView(r))
+	case http.MethodPut:
+		var in struct {
+			Enabled   *bool  `json:"enabled"`
+			SocksPort *int   `json:"socks_port"`
+			HTTPPort  *int   `json:"http_port"`
+			Mode      string `json:"mode"` // token / custom
+			User      string `json:"user"`
+			Pass      string `json:"pass"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		socksPort, httpPort := s.cfg.ProxyPort, s.cfg.ProxyHTTPPort
+		if in.SocksPort != nil {
+			if *in.SocksPort < 0 || *in.SocksPort > 65535 {
+				http.Error(w, "SOCKS5 端口无效", http.StatusBadRequest)
+				return
+			}
+			socksPort = *in.SocksPort
+		}
+		if in.HTTPPort != nil {
+			if *in.HTTPPort < 0 || *in.HTTPPort > 65535 {
+				http.Error(w, "HTTP 代理端口无效", http.StatusBadRequest)
+				return
+			}
+			httpPort = *in.HTTPPort
+		}
+		// 端口冲突检查：与其他固定端口及已有隧道公网端口互斥
+		taken := map[int]string{
+			s.cfg.WebPort: "Web 控制台", s.cfg.ControlPort: "隧道控制",
+			s.cfg.WorkPort: "工作端口", s.cfg.P2pPort: "P2P",
+		}
+		if s.cfg.HttpPort > 0 {
+			taken[s.cfg.HttpPort] = "HTTP 网站隧道"
+		}
+		if s.cfg.HttpsPort > 0 {
+			taken[s.cfg.HttpsPort] = "HTTPS 网站隧道"
+		}
+		for _, t := range s.tunnels {
+			if t.PublicPort > 0 {
+				taken[t.PublicPort] = "隧道 " + t.Name
+			}
+		}
+		delete(taken, s.cfg.ProxyPort)     // 原值自身不算冲突
+		delete(taken, s.cfg.ProxyHTTPPort) // 端口对调的合法场景
+		if socksPort > 0 {
+			if other, ok := taken[socksPort]; ok && socksPort != httpPort {
+				http.Error(w, fmt.Sprintf("SOCKS5 端口 %d 已被占用（%s）", socksPort, other), http.StatusBadRequest)
+				return
+			}
+		}
+		if httpPort > 0 {
+			if other, ok := taken[httpPort]; ok && httpPort != socksPort {
+				http.Error(w, fmt.Sprintf("HTTP 代理端口 %d 已被占用（%s）", httpPort, other), http.StatusBadRequest)
+				return
+			}
+		}
+		if socksPort > 0 && httpPort > 0 && socksPort == httpPort {
+			http.Error(w, "SOCKS5 与 HTTP 代理端口不能相同", http.StatusBadRequest)
+			return
+		}
+		user, pass := s.cfg.ProxyUser, s.cfg.ProxyPass
+		if in.Mode == "custom" {
+			if strings.TrimSpace(in.User) == "" || strings.TrimSpace(in.Pass) == "" {
+				http.Error(w, "自定义鉴权需要填写账号与密码", http.StatusBadRequest)
+				return
+			}
+			if len(in.Pass) < 6 {
+				http.Error(w, "自定义密码至少 6 位", http.StatusBadRequest)
+				return
+			}
+			user, pass = strings.TrimSpace(in.User), in.Pass
+		} else {
+			user, pass = "", "" // 使用管理员令牌
+		}
+		enabled := s.cfg.ProxyEnabled
+		if in.Enabled != nil {
+			enabled = *in.Enabled
+		}
+		if enabled && socksPort == 0 && httpPort == 0 {
+			http.Error(w, "已开启代理网关但未配置任何端口", http.StatusBadRequest)
+			return
+		}
+
+		s.mu.Lock()
+		s.cfg.ProxyEnabled = enabled
+		s.cfg.ProxyPort = socksPort
+		s.cfg.ProxyHTTPPort = httpPort
+		s.cfg.ProxyUser = user
+		s.cfg.ProxyPass = pass
+		s.mu.Unlock()
+		s.applyProxyConfig()
+		s.saveConfig()
+		core.LogEvent("admin", "ok", fmt.Sprintf("代理网关配置已更新：开关=%v SOCKS5=%d HTTP=%d 鉴权=%s", enabled, socksPort, httpPort, orDefaultName(in.Mode, "token")))
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// proxyView 汇总配置、运行状态、统计与客户端接入材料（Clash 配置 / 订阅链接）
+func (s *Server) proxyView(r *http.Request) map[string]any {
+	s.mu.Lock()
+	enabled := s.cfg.ProxyEnabled
+	socksPort, httpPort := s.cfg.ProxyPort, s.cfg.ProxyHTTPPort
+	user, pass := s.cfg.ProxyUser, s.cfg.ProxyPass
+	webPort := s.cfg.WebPort
+	socksRunning := s.socksLn != nil
+	httpRunning := s.httpLn != nil
+	s.mu.Unlock()
+
+	host := publicHostFromReq(r)
+	out := map[string]any{
+		"enabled":       enabled,
+		"socks_port":    socksPort,
+		"http_port":     httpPort,
+		"user":          user,
+		"pass":          pass,
+		"use_token":     user == "" && pass == "",
+		"socks_running": socksRunning,
+		"http_running":  httpRunning,
+		"web_port":      webPort,
+		"public_host":   host,
+		"stats":         s.px.snapshot(),
+	}
+	if host != "" {
+		u, p := user, pass
+		if u == "" {
+			u = s.cfg.AdminToken
+		}
+		if p == "" {
+			p = s.cfg.AdminToken
+		}
+		out["clash_yaml"] = clashConfigYAML(host, socksPort, httpPort, u, p)
+		out["sub_url"] = fmt.Sprintf("http://%s/api/proxy/clash?token=%s", host, s.cfg.AdminToken)
+	}
+	return out
+}
+
+// handleProxyClash 返回 Clash 配置 YAML；?download=1 时作为附件下载。
+// 该 URL 即「订阅链接」：Clash → Profiles → URL 导入。
+func (s *Server) handleProxyClash(w http.ResponseWriter, r *http.Request) {
+	if !s.authed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	host := publicHostFromReq(r)
+	u, p := s.proxyCreds()
+	yaml := clashConfigYAML(host, s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, u, p)
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	if r.URL.Query().Get("download") == "1" {
+		w.Header().Set("Content-Disposition", "attachment; filename=\"clash-rtp.yaml\"")
+	}
+	_, _ = w.Write([]byte(yaml))
+}
+
+// publicHostFromReq 从请求 Host 推断服务端对外地址（去掉端口；回环地址回退 base_domain）
+func publicHostFromReq(r *http.Request) string {
+	h := r.Host
+	if i := strings.LastIndex(h, ":"); i >= 0 && !strings.Contains(strings.TrimPrefix(h, "["), "]") {
+		// IPv6 [::1]:8080 或 host:port
+		if !strings.HasPrefix(h, "[") || strings.Contains(h, "]") {
+			h = h[:i]
+		}
+	}
+	h = strings.Trim(h, "[]")
+	if h == "" || h == "127.0.0.1" || h == "localhost" || h == "::1" {
+		return ""
+	}
+	return h
+}
+
+// clashConfigYAML 生成可直接导入 Clash 的配置
+func clashConfigYAML(host string, socksPort, httpPort int, user, pass string) string {
+	var names []string
+	var b strings.Builder
+	b.WriteString("# rtp 代理网关 · Clash 配置（由服务端自动生成）\n")
+	b.WriteString("# 导入后请选中 RTP-Server-LAN 节点（建议开启全局模式）\n")
+	b.WriteString("mixed-port: 7890\nmode: global\nlog-level: info\n\nproxies:\n")
+	if socksPort > 0 {
+		names = append(names, "RTP-Server-LAN")
+		fmt.Fprintf(&b, "  - name: \"RTP-Server-LAN\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    udp: true\n\n", host, socksPort, user, pass)
+	}
+	if httpPort > 0 {
+		names = append(names, "RTP-Server-HTTP")
+		fmt.Fprintf(&b, "  - name: \"RTP-Server-HTTP\"\n    type: http\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n\n", host, httpPort, user, pass)
+	}
+	if len(names) == 0 {
+		return "# 代理网关未启用：请先在「代理」页开启并配置端口\n"
+	}
+	b.WriteString("proxy-groups:\n  - name: PROXY\n    type: select\n    proxies:\n")
+	for _, n := range names {
+		fmt.Fprintf(&b, "      - \"%s\"\n", n)
+	}
+	b.WriteString("\nrules:\n")
+	for _, n := range names {
+		fmt.Fprintf(&b, "  - \"MATCH,%s\"\n", n)
+	}
+	return b.String()
 }
 
 // ---------- 设置 ----------

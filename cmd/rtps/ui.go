@@ -271,7 +271,7 @@ tr.rowlink td:first-child{position:relative}
 <script>
 var _p=[%d,%d,%d,%d,%d,%d];
 var VERSION='';
-var NAV=[['dashboard','📊','仪表盘'],['clients','🖥','客户端'],['tunnels','🔀','隧道'],['traffic','📈','流量'],['tools','🧰','工具'],['events','📜','事件'],['settings','⚙️','设置']];
+var NAV=[['dashboard','📊','仪表盘'],['clients','🖥','客户端'],['tunnels','🔀','隧道'],['proxy','🌐','代理'],['traffic','📈','流量'],['tools','🧰','工具'],['events','📜','事件'],['settings','⚙️','设置']];
 var state={me:null,view:'dashboard',clients:[],tunnels:[],events:[],stats:null,settings:null,webhooks:[],eventTypes:{},
   search:{clients:'',tunnels:'',events:''},tf:'all',ef:'all',hist:[],last:null,lastTs:0,
   report:null,
@@ -431,6 +431,7 @@ function render(){
   if(state.view==='dashboard')c.innerHTML=viewDashboard();
   else if(state.view==='clients')c.innerHTML=viewClients();
   else if(state.view==='tunnels')c.innerHTML=viewTunnels();
+  else if(state.view==='proxy'){c.innerHTML=viewProxy();proxyLoad(true);}
   else if(state.view==='traffic'){c.innerHTML=viewTraffic();tfReload()}
   else if(state.view==='tools')c.innerHTML=viewTools();
   else if(state.view==='events')c.innerHTML=viewEvents();
@@ -1305,6 +1306,135 @@ function saveAdminToken(){
     loadSettings();
   }).catch(function(e){toast(e.message||'更换失败','err')});
 }
+
+/* ---------- 视图：代理网关 ---------- */
+function viewProxy(){
+  return '<div class="page-head"><div><h1>代理网关</h1><div class="page-sub">把 Clash / 浏览器代理指向服务端，即可像同处一个局域网一样访问服务端侧的内网设备（无需客户端在线）；支持 SOCKS5 与 HTTP 代理、令牌或自定义账号密码鉴权</div></div>'
+    +'<button class="btn" onclick="proxyLoad(true)">↻ 刷新</button></div>'
+    +'<div class="grid-2">'
+    +'<div class="card glass"><div class="card-head">⚙️ 开关 · 端口 · 鉴权</div>'
+      +'<div class="form-row"><label>代理网关</label><select id="px-enabled"><option value="1">开启</option><option value="0">关闭</option></select></div>'
+      +'<div class="form-row"><label>SOCKS5 端口（TCP+UDP，推荐）</label><input id="px-socks" placeholder="例如 7003，0 或留空 = 关闭"></div>'
+      +'<div class="form-row"><label>HTTP 代理端口（默认关闭）</label><input id="px-http" placeholder="0 = 关闭（默认）"></div>'
+      +'<div class="form-row"><label>鉴权方式</label><select id="px-mode" onchange="renderPxAuth()"><option value="token">管理员令牌（推荐）</option><option value="custom">自定义账号密码</option></select></div>'
+      +'<div id="px-auth"></div>'
+      +'<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn primary" onclick="proxySave()">保存并即时生效</button><span id="px-run" class="chip"></span></div>'
+      +'<div class="hint" style="margin-top:8px">SOCKS5 支持 CONNECT 与 UDP 中继；HTTP 代理支持普通转发与 CONNECT(HTTPS)。修改保存后立即生效，无需重启服务端；端口不能与 Web / 控制 / 工作等端口或已有隧道端口冲突。</div>'
+    +'</div>'
+    +'<div class="card glass"><div class="card-head">📊 流量统计与连接监控 <span class="mini-link" onclick="proxyPoll()">刷新 →</span></div><div id="px-stats" class="hint">加载中…</div></div>'
+    +'</div>'
+    +'<div class="card glass" style="margin-top:14px"><div class="card-head">📖 Clash 配置 · 订阅链接 · 使用教程</div><div id="px-help" class="hint">加载中…</div></div>';
+}
+function proxyLoad(full){
+  apiJSON('/api/proxy').then(function(d){
+    state.proxy=d;
+    if(full!==false){renderProxyForm();renderPxAuth();}
+    renderProxyRun();renderProxyStats();renderProxyHelp();
+  }).catch(function(e){toast(e.message||'代理配置加载失败','err')});
+}
+function proxyPoll(){
+  apiJSON('/api/proxy').then(function(d){
+    state.proxy=d;renderProxyRun();renderProxyStats();
+  }).catch(function(){});
+}
+function renderProxyRun(){
+  var run=$('px-run');if(!run)return;
+  var d=state.proxy||{};
+  var h=d.socks_running?'<b style="color:var(--ok)">🟢 SOCKS5 :'+esc(d.socks_port||'-')+'</b>':'⚫ SOCKS5 未运行';
+  if(d.http_port>0)h+=' ｜ '+(d.http_running?'<b style="color:var(--ok)">🟢 HTTP :'+esc(d.http_port)+'</b>':'<span style="color:var(--warn)">⚠ HTTP 未运行</span>');
+  run.innerHTML=h;
+}
+function renderProxyForm(){
+  var d=state.proxy||{};if(!$('px-enabled'))return;
+  $('px-enabled').value=d.enabled?'1':'0';
+  $('px-socks').value=d.socks_port||'';
+  $('px-http').value=d.http_port||'';
+  $('px-mode').value=d.use_token?'token':'custom';
+}
+function renderPxAuth(){
+  var m=$('px-mode')?$('px-mode').value:'token',d=state.proxy||{};
+  var el=$('px-auth');if(!el)return;
+  if(m==='token'){el.innerHTML='<div class="hint" style="margin-top:6px">将使用管理员令牌同时作为账号与密码（可在「设置」页更换令牌，更换后旧凭据立即失效）。</div>';return}
+  el.innerHTML='<div class="form-2col" style="margin-top:6px"><div class="form-row"><label>账号</label><input id="px-user" value="'+esc(d.user||'')+'" placeholder="自定义用户名"></div>'
+    +'<div class="form-row"><label>密码（至少 6 位）</label><input id="px-pass" value="'+esc(d.pass||'')+'" placeholder="自定义密码"></div></div>';
+}
+function proxySave(){
+  if(!$('px-enabled'))return;
+  var body={mode:$('px-mode').value};
+  body.enabled=$('px-enabled').value==='1';
+  var sp=parseInt($('px-socks').value,10);body.socks_port=isNaN(sp)?0:sp;
+  var hp=parseInt($('px-http').value,10);body.http_port=isNaN(hp)?0:hp;
+  if(body.mode==='custom'){
+    body.user=($('px-user')?$('px-user').value:'').trim();
+    body.pass=($('px-pass')?$('px-pass').value:'');
+    if(!body.user||!body.pass){toast('请填写自定义账号与密码','warn');return}
+  }
+  apiJSON('/api/proxy',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  .then(function(){toast('代理配置已保存并生效');proxyLoad(true)})
+  .catch(function(e){toast(e.message||'保存失败','err')});
+}
+function durHuman(ts){var s=Math.max(0,Math.floor(Date.now()/1000-ts));if(s<60)return s+' 秒';if(s<3600)return Math.floor(s/60)+' 分钟';return Math.floor(s/3600)+' 小时 '+Math.floor((s%3600)/60)+' 分'}
+function renderProxyStats(){
+  var el=$('px-stats');if(!el)return;
+  var st=(state.proxy||{}).stats||{};
+  var conns=st.conns||[],ips=st.per_ip||[];
+  var h='<div class="grid-4" style="margin-bottom:10px">'
+    +'<div class="card glass stat"><div class="stat-label">当前连接</div><div class="stat-val">'+(st.cur||0)+'</div><div class="stat-sub">峰值 '+(st.peak||0)+'</div></div>'
+    +'<div class="card glass stat"><div class="stat-label">累计入口（客户端→网关）</div><div class="stat-val" style="color:var(--up)">'+fmtBytes(st.total_up)+'</div></div>'
+    +'<div class="card glass stat"><div class="stat-label">累计出口（网关→客户端）</div><div class="stat-val" style="color:var(--down)">'+fmtBytes(st.total_down)+'</div></div>'
+    +'<div class="card glass stat"><div class="stat-label">来源 IP</div><div class="stat-val">'+ips.length+'</div><div class="stat-sub">监听连接</div></div>'
+    +'</div>';
+  if(conns.length){
+    h+='<div class="hint" style="margin:6px 0 4px"><b>🔌 活动连接（'+conns.length+'）</b></div><div style="overflow:auto;max-height:230px"><table><thead><tr><th>来源</th><th>目标</th><th>协议</th><th>入口</th><th>出口</th><th>已连接</th></tr></thead><tbody>';
+    conns.forEach(function(c){
+      h+='<tr><td class="mono">'+esc(c.client)+'</td><td class="mono">'+esc(c.target)+'</td><td>'+esc(c.proto)+'</td><td>'+fmtBytes(c.up)+'</td><td>'+fmtBytes(c.down)+'</td><td>'+durHuman(c.start)+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  if(ips.length){
+    h+='<div class="hint" style="margin:10px 0 4px"><b>📍 按来源 IP 汇总</b></div><div style="overflow:auto;max-height:230px"><table><thead><tr><th>IP</th><th>连接数</th><th>入口</th><th>出口</th><th>最近活动</th></tr></thead><tbody>';
+    ips.slice().sort(function(a,b){return (b.up+b.down)-(a.up+a.down)}).forEach(function(p){
+      h+='<tr><td class="mono">'+esc(p.ip)+'</td><td>'+p.conns+'</td><td>'+fmtBytes(p.up)+'</td><td>'+fmtBytes(p.down)+'</td><td>'+relTime(p.last)+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  if(!conns.length&&!ips.length)h+='<div class="hint">暂无连接记录。配置好客户端后，这里会实时显示来源 IP、目标地址与出入流量。</div>';
+  el.innerHTML=h;
+}
+function renderProxyHelp(){
+  var el=$('px-help');if(!el)return;
+  var d=state.proxy||{},h='';
+  if(d.clash_yaml){
+    h+='<div class="form-row"><label>Clash 配置（一键复制导入）</label></div>'
+      +'<pre class="mono" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px;overflow:auto;max-height:280px;font-size:12px">'+esc(d.clash_yaml)+'</pre>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+      +'<button class="btn sm primary" onclick="copyText(state.proxy.clash_yaml,\'Clash 配置已复制\')">📋 复制配置</button>'
+      +'<button class="btn sm" onclick="copyText(state.proxy.sub_url,\'订阅链接已复制\')">🔗 复制订阅链接</button>'
+      +'<a class="btn sm" href="'+esc(d.sub_url)+'&download=1">⬇ 下载 clash-rtp.yaml</a></div>'
+      +'<div class="form-row" style="margin-top:12px"><label>订阅链接（Clash → Profiles → URL 导入）</label><input readonly value="'+esc(d.sub_url)+'" onclick="this.select()"></div>'
+      +'<div class="hint">订阅链接含管理员令牌，请勿泄露；如服务端 Web 端口未对公网开放，请在本机或内网环境使用。</div>';
+  }else{
+    h+='<div class="hint">启用代理网关并配置端口后，这里会自动生成 Clash 配置与订阅链接。</div>';
+  }
+  h+='<div class="grid-2" style="margin-top:14px">'
+    +'<div><div class="hint"><b>📖 使用步骤</b></div><div class="hint" style="margin-top:6px;line-height:2">'
+    +'1️⃣ 下载 Clash 客户端（右侧地址）<br>'
+    +'2️⃣ Profiles → 新建 → <b>URL 导入</b>，粘贴订阅链接；或新建本地配置粘贴上方 YAML<br>'
+    +'3️⃣ 选中 <b>RTP-Server-LAN</b> 节点（建议开启「全局模式」）<br>'
+    +'4️⃣ 开启系统代理（Clash 默认监听 <span class="mono">127.0.0.1:7890</span>）<br>'
+    +'5️⃣ 浏览器访问服务端内网设备：使用<b>服务端内网 IP</b>，例如 <span class="mono">http://10.0.0.15:8080</span><br>'
+    +'6️⃣ 局域网其他设备同理：<span class="mono">http://192.168.1.1</span>、<span class="mono">\\\\192.168.1.100\\share</span> 等</div>'
+    +'<div class="hint" style="margin-top:8px">⚠️ Windows 自带「系统代理」不支持 SOCKS 认证；浏览器请统一通过 Clash 或 Firefox 使用 SOCKS5。</div>'
+    +'<div class="hint">⚠️ 10.0.0.15 等内网 IP 以服务端实际内网地址为准（如 192.168.x.x）。</div></div>'
+    +'<div><div class="hint"><b>⬇️ Clash 下载地址</b></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'
+    +'<a class="btn sm" target="_blank" href="https://github.com/clash-verge-rev/clash-verge-rev/releases">🪟🍎🐧 Clash Verge Rev</a>'
+    +'<a class="btn sm" target="_blank" href="https://github.com/MetaCubeX/ClashMetaForAndroid/releases">📲 Android Clash Meta</a>'
+    +'</div><div class="hint" style="margin-top:10px">⚠️ 代理网关已强制鉴权；所有流量都会经你的服务端出口，请勿把账号密码或订阅链接透露给他人。</div>'
+    +'<div class="hint">💡 HTTP 代理默认关闭；如需给只支持 HTTP 代理的软件使用，可在左上方配置 HTTP 端口开启。</div></div>'
+    +'</div>';
+  el.innerHTML=h;
+}
+setInterval(function(){if(state.view==='proxy')proxyPoll()},3000);
 
 /* ---------- 通知机器人 ---------- */
 var WH_TYPES=[['client_online','客户端上线'],['client_offline','客户端下线'],['client_create','客户端创建'],['client_update','客户端修改'],['tunnel_create','隧道创建'],['tunnel_update','隧道修改'],['tunnel_delete','隧道删除'],['p2p','P2P 直连'],['admin','管理操作']];

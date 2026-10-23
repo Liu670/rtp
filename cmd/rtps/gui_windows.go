@@ -249,6 +249,7 @@ func saveFromUI() bool {
 	cfg.ControlPort = ctlPort
 	cfg.WorkPort = workPort
 	cfg.ProxyPort = proxyPort
+	cfg.ProxyEnabled = proxyPort > 0
 	if t := strings.TrimSpace(guiApp.Text(idToken + 1)); t != "" && t != "(留空自动生成)" {
 		cfg.AdminToken = t
 	}
@@ -304,6 +305,9 @@ func startServer() {
 	precheck := []int{cfg.ControlPort, cfg.WorkPort, cfg.WebPort}
 	if cfg.ProxyPort > 0 {
 		precheck = append(precheck, cfg.ProxyPort)
+	}
+	if cfg.ProxyHTTPPort > 0 {
+		precheck = append(precheck, cfg.ProxyHTTPPort)
 	}
 	if busy, which := checkPortBusy(precheck...); busy {
 		appendLog(fmt.Sprintf("端口 %s 被占用，无法启动；请修改端口或关闭占用程序后重试", which))
