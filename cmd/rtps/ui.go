@@ -13,6 +13,7 @@ const uiHTML = `<!doctype html>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <style>
 :root{
+  color-scheme:dark;
   --bg:#0b1020; --bg2:#0e1428; --card:rgba(255,255,255,.05); --card2:rgba(255,255,255,.08);
   --border:rgba(255,255,255,.10); --text:#e8ecf6; --muted:#8b93ad;
   --accent:#6366f1; --accent2:#8b5cf6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444;
@@ -20,6 +21,7 @@ const uiHTML = `<!doctype html>
   --shadow:0 10px 34px rgba(0,0,0,.38); --r:14px;
 }
 body.light{
+  color-scheme:light;
   --bg:#eef1f8; --bg2:#ffffff; --card:rgba(255,255,255,.9); --card2:#ffffff;
   --border:rgba(15,23,42,.10); --text:#1e293b; --muted:#64748b;
   --shadow:0 10px 30px rgba(15,23,42,.10);
@@ -35,6 +37,8 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(60rem 
 button{font:inherit;color:inherit;cursor:pointer;background:none;border:none}
 input,select,textarea{font:inherit;color:var(--text);background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;outline:none;width:100%%;transition:border-color .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+select option{background:var(--bg2);color:var(--text)}
+body.light select option{background:#ffffff;color:#1e293b}
 a{color:var(--accent);text-decoration:none}
 .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
 ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px}
