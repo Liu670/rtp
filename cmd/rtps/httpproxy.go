@@ -132,7 +132,7 @@ func (s *Server) httpRelay(conn net.Conn, clientIP string, req *http.Request) {
 	u.Host = hostPort
 	req.URL = &u
 	req.Header.Del("Proxy-Authorization")
-	if _, err := req.Write(&countWriter{w: remote, n: upC}); err != nil {
+	if err := req.Write(&countWriter{w: remote, n: upC}); err != nil {
 		return
 	}
 	// 响应方向整段回传（服务端收到 Connection: close 后会主动断开，Copy 随之结束）
