@@ -2,23 +2,23 @@ package main
 
 import (
 	"bufio"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/Liu670/rtp/internal/core"
 )
 
-// HTTP 代理网关：与 SOCKS5 共用同一套鉴权（proxyCreds/proxyAuthOK）与统计（px）。
+// HTTP 代理网关：与 SOCKS5 共用同一套统计（px）。
 //   - 普通 HTTP 请求（绝对地址 URI）→ 服务端代为访问并回传响应
 //   - CONNECT host:port            → HTTPS 隧道（双向透传）
-// 浏览器 / SwitchyOmega / 程序内「HTTP 代理」设置均可直连使用；默认关闭，需在
-// Web 控制台「代理」页启用。
+// 设计约定：HTTP 代理「免鉴权」——开启后在系统/浏览器代理直接填 服务端IP:端口 即可使用
+// （SOCKS5 仍需令牌/账号密码鉴权）。公开免密代理有被滥用的风险，Web 控制台会有提示，
+// 建议仅在需要时临时开启、用完即关。
+// 默认关闭，需在 Web 控制台「代理」页启用。
 
 func (s *Server) serveHTTPProxy(addr string) {
 	ln, err := net.Listen("tcp", addr)
@@ -50,20 +50,7 @@ func (s *Server) handleHTTPProxy(conn net.Conn) {
 		return
 	}
 
-	// 鉴权：Proxy-Authorization: Basic base64(user:pass)
-	authOK := false
-	if auth := req.Header.Get("Proxy-Authorization"); strings.HasPrefix(strings.ToLower(auth), "basic ") {
-		if raw, e := base64.StdEncoding.DecodeString(strings.TrimSpace(auth[6:])); e == nil {
-			if i := strings.IndexByte(string(raw), ':'); i >= 0 {
-				authOK = s.proxyAuthOK(string(raw[:i]), string(raw[i+1:]))
-			}
-		}
-	}
-	if !authOK {
-		fmt.Fprint(conn, "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"rtp proxy\"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
-		return
-	}
-
+	// HTTP 代理免鉴权（产品约定）：直接放行；SOCKS5 网关保持令牌/账密鉴权。
 	clientIP := hostOnly(conn.RemoteAddr().String())
 
 	if req.Method == http.MethodConnect {

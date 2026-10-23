@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"github.com/Liu670/rtp/internal/core"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,6 +33,7 @@ func (s *Server) StartWeb(addr string) {
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/proxy", s.handleProxy)
 	mux.HandleFunc("/api/proxy/clash", s.handleProxyClash)
+	mux.HandleFunc("/api/proxy/geo", s.handleProxyGeo)
 	mux.HandleFunc("/api/client_cmd", s.handleClientCmd)
 	mux.HandleFunc("/api/download", s.handleDownload)
 	// 账号密码鉴权
@@ -1041,6 +1045,129 @@ func (s *Server) handleProxyClash(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(yaml))
 }
 
+// ---------- IP 归属地 ----------
+
+type pxGeoEntry struct {
+	Loc     string `json:"loc"`     // 归属地描述，如 "中国 上海"
+	CN      bool   `json:"cn"`      // 是否中国大陆
+	Private bool   `json:"private"` // 内网/回环地址
+	Expire  int64  `json:"-"`
+}
+
+var geoCache = struct {
+	sync.Mutex
+	m map[string]pxGeoEntry
+}{m: map[string]pxGeoEntry{}}
+
+// handleProxyGeo 批量查询 IP/域名归属地。私有/回环地址直接标内网；
+// 查询失败按「未知」处理且视为中国大陆（避免误标红）。缓存 24 小时。
+func (s *Server) handleProxyGeo(w http.ResponseWriter, r *http.Request) {
+	if !s.authed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Ips []string `json:"ips"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		http.Error(w, "bad body", http.StatusBadRequest)
+		return
+	}
+	now := time.Now().Unix()
+	res := map[string]pxGeoEntry{}
+	geoCache.Lock()
+	var need []string
+	for _, raw := range in.Ips {
+		ip := strings.TrimSpace(raw)
+		if ip == "" {
+			continue
+		}
+		if e, ok := geoCache.m[ip]; ok && e.Expire > now {
+			res[ip] = pxGeoEntry{Loc: e.Loc, CN: e.CN, Private: e.Private}
+			continue
+		}
+		need = append(need, ip)
+	}
+	geoCache.Unlock()
+	if len(need) > 0 {
+		got := queryGeoBatch(need)
+		geoCache.Lock()
+		for ip, e := range got {
+			geoCache.m[ip] = pxGeoEntry{Loc: e.Loc, CN: e.CN, Private: e.Private, Expire: now + 86400}
+			res[ip] = pxGeoEntry{Loc: e.Loc, CN: e.CN, Private: e.Private}
+		}
+		geoCache.Unlock()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"geo": res})
+}
+
+func isPrivateIPStr(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast())
+}
+
+// queryGeoBatch 通过 ip-api.com 免费接口批量查询归属地（单次最多 100 条，失败返回「未知」）。
+func queryGeoBatch(ips []string) map[string]pxGeoEntry {
+	out := map[string]pxGeoEntry{}
+	var remote []string
+	for _, ip := range ips {
+		if isPrivateIPStr(ip) {
+			out[ip] = pxGeoEntry{Loc: "内网/本地", CN: true, Private: true}
+			continue
+		}
+		remote = append(remote, ip)
+	}
+	if len(remote) == 0 {
+		return out
+	}
+	type ipApiResp struct {
+		Status      string `json:"status"`
+		Country     string `json:"country"`
+		CountryCode string `json:"countryCode"`
+		City        string `json:"city"`
+		Query       string `json:"query"`
+	}
+	payload, _ := json.Marshal(remote)
+	client := &http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Post("http://ip-api.com/batch?fields=status,country,countryCode,city,query&lang=zh-CN",
+		"application/json", bytes.NewReader(payload))
+	if err != nil {
+		for _, ip := range remote {
+			out[ip] = pxGeoEntry{Loc: "未知", CN: true}
+		}
+		return out
+	}
+	defer resp.Body.Close()
+	var arr []ipApiResp
+	if err := json.NewDecoder(resp.Body).Decode(&arr); err != nil {
+		for _, ip := range remote {
+			out[ip] = pxGeoEntry{Loc: "未知", CN: true}
+		}
+		return out
+	}
+	byQuery := map[string]ipApiResp{}
+	for _, e := range arr {
+		byQuery[e.Query] = e
+	}
+	for _, ip := range remote {
+		e, ok := byQuery[ip]
+		if !ok || e.Status != "success" {
+			out[ip] = pxGeoEntry{Loc: "未知", CN: true}
+			continue
+		}
+		loc := strings.TrimSpace(e.Country)
+		if e.City != "" && e.City != e.Country {
+			loc = strings.TrimSpace(e.Country + " " + e.City)
+		}
+		out[ip] = pxGeoEntry{Loc: loc, CN: e.CountryCode == "CN"}
+	}
+	return out
+}
+
 // publicHostFromReq 从请求 Host 推断服务端对外地址（去掉端口；回环地址回退 base_domain）
 func publicHostFromReq(r *http.Request) string {
 	h := r.Host
@@ -1069,8 +1196,9 @@ func clashConfigYAML(host string, socksPort, httpPort int, user, pass string) st
 		fmt.Fprintf(&b, "  - name: \"RTP-Server-LAN\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    udp: true\n\n", host, socksPort, user, pass)
 	}
 	if httpPort > 0 {
+		// HTTP 代理为免密直连，Clash 节点不带账密
 		names = append(names, "RTP-Server-HTTP")
-		fmt.Fprintf(&b, "  - name: \"RTP-Server-HTTP\"\n    type: http\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n\n", host, httpPort, user, pass)
+		fmt.Fprintf(&b, "  - name: \"RTP-Server-HTTP\"\n    type: http\n    server: %s\n    port: %d\n\n", host, httpPort)
 	}
 	if len(names) == 0 {
 		return "# 代理网关未启用：请先在「代理」页开启并配置端口\n"

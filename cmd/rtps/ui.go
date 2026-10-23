@@ -1315,11 +1315,13 @@ function viewProxy(){
     +'<div class="card glass"><div class="card-head">⚙️ 开关 · 端口 · 鉴权</div>'
       +'<div class="form-row"><label>代理网关</label><select id="px-enabled"><option value="1">开启</option><option value="0">关闭</option></select></div>'
       +'<div class="form-row"><label>SOCKS5 端口（TCP+UDP，推荐）</label><input id="px-socks" placeholder="例如 7003，0 或留空 = 关闭"></div>'
-      +'<div class="form-row"><label>HTTP 代理端口（默认关闭）</label><input id="px-http" placeholder="0 = 关闭（默认）"></div>'
+      +'<div class="form-row"><label>HTTP 代理（默认关闭，开启后免密码直连）</label><select id="px-http-mode" onchange="renderPxHttp()"><option value="0">关闭（默认）</option><option value="1">开启（无需账号密码）</option></select></div>'
+      +'<div class="form-row" id="px-http-row" style="display:none"><label>HTTP 代理端口</label><input id="px-http" placeholder="例如 7004"></div>'
       +'<div class="form-row"><label>鉴权方式</label><select id="px-mode" onchange="renderPxAuth()"><option value="token">管理员令牌（推荐）</option><option value="custom">自定义账号密码</option></select></div>'
       +'<div id="px-auth"></div>'
       +'<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn primary" onclick="proxySave()">保存并即时生效</button><span id="px-run" class="chip"></span></div>'
-      +'<div class="hint" style="margin-top:8px">SOCKS5 支持 CONNECT 与 UDP 中继；HTTP 代理支持普通转发与 CONNECT(HTTPS)。修改保存后立即生效，无需重启服务端；端口不能与 Web / 控制 / 工作等端口或已有隧道端口冲突。</div>'
+      +'<div class="hint" style="margin-top:8px">SOCKS5 支持 CONNECT 与 UDP 中继，需账号密码（令牌或自定义）；HTTP 代理免密码，开启后直接在系统代理填 <span class="mono">服务端IP:HTTP端口</span> 即可使用。修改保存后立即生效，无需重启服务端；端口不能与 Web / 控制 / 工作等端口或已有隧道端口冲突。</div>'
+      +'<div class="hint" style="margin-top:6px;color:var(--warn,#d80)">⚠ 免密 HTTP 代理属于公开代理，任何人知道地址都能借用你的服务端出口，请仅在需要时临时开启、用完即关。</div>'
     +'</div>'
     +'<div class="card glass"><div class="card-head">📊 流量统计与连接监控 <span class="mini-link" onclick="proxyPoll()">刷新 →</span></div><div id="px-stats" class="hint">加载中…</div></div>'
     +'</div>'
@@ -1348,8 +1350,14 @@ function renderProxyForm(){
   var d=state.proxy||{};if(!$('px-enabled'))return;
   $('px-enabled').value=d.enabled?'1':'0';
   $('px-socks').value=d.socks_port||'';
+  $('px-http-mode').value=(d.http_port&&d.http_port>0)?'1':'0';
   $('px-http').value=d.http_port||'';
+  renderPxHttp();
   $('px-mode').value=d.use_token?'token':'custom';
+}
+function renderPxHttp(){
+  var on=$('px-http-mode')&&$('px-http-mode').value==='1';
+  if($('px-http-row'))$('px-http-row').style.display=on?'':'none';
 }
 function renderPxAuth(){
   var m=$('px-mode')?$('px-mode').value:'token',d=state.proxy||{};
@@ -1363,7 +1371,9 @@ function proxySave(){
   var body={mode:$('px-mode').value};
   body.enabled=$('px-enabled').value==='1';
   var sp=parseInt($('px-socks').value,10);body.socks_port=isNaN(sp)?0:sp;
-  var hp=parseInt($('px-http').value,10);body.http_port=isNaN(hp)?0:hp;
+  var hmode=$('px-http-mode')&&$('px-http-mode').value==='1';
+  var hp=parseInt($('px-http').value,10);
+  body.http_port=hmode?(isNaN(hp)||hp<=0?7004:hp):0;
   if(body.mode==='custom'){
     body.user=($('px-user')?$('px-user').value:'').trim();
     body.pass=($('px-pass')?$('px-pass').value:'');
@@ -1374,6 +1384,24 @@ function proxySave(){
   .catch(function(e){toast(e.message||'保存失败','err')});
 }
 function durHuman(ts){var s=Math.max(0,Math.floor(Date.now()/1000-ts));if(s<60)return s+' 秒';if(s<3600)return Math.floor(s/60)+' 分钟';return Math.floor(s/3600)+' 小时 '+Math.floor((s%%3600)/60)+' 分'}
+/* IP 归属地：非中国大陆标红 */
+var pxGeo={};
+function hostOf(t){if(!t)return '';if(t.charAt(0)==='['){var j=t.indexOf(']');return j>0?t.slice(0,j+1):t}var i=t.lastIndexOf(':');return i>0?t.slice(0,i):t}
+function geoCell(ip){
+  var g=pxGeo[ip];
+  if(g&&g.private)return '<span style="color:var(--muted,#8a93a6)">内网/本地</span>';
+  if(!g)return '<span style="color:var(--muted,#8a93a6)">…</span>';
+  if(!g.cn)return '<b style="color:#e05252">'+esc(g.loc||'海外')+' ⚠</b>';
+  return '<span>'+esc(g.loc||'中国')+'</span>';
+}
+function geoLookup(list,cb){
+  var need=[];
+  list.forEach(function(ip){if(ip&&!(ip in pxGeo))need.push(ip)});
+  if(!need.length){cb(false);return}
+  apiJSON('/api/proxy/geo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ips:need})})
+  .then(function(d){var g=d.geo||{};for(var k in g)pxGeo[k]=g[k];cb(true)})
+  .catch(function(){need.forEach(function(ip){pxGeo[ip]={loc:'未知',cn:true}});cb(true)});
+}
 function renderProxyStats(){
   var el=$('px-stats');if(!el)return;
   var st=(state.proxy||{}).stats||{};
@@ -1385,21 +1413,25 @@ function renderProxyStats(){
     +'<div class="card glass stat"><div class="stat-label">来源 IP</div><div class="stat-val">'+ips.length+'</div><div class="stat-sub">监听连接</div></div>'
     +'</div>';
   if(conns.length){
-    h+='<div class="hint" style="margin:6px 0 4px"><b>🔌 活动连接（'+conns.length+'）</b></div><div style="overflow:auto;max-height:230px"><table><thead><tr><th>来源</th><th>目标</th><th>协议</th><th>入口</th><th>出口</th><th>已连接</th></tr></thead><tbody>';
+    h+='<div class="hint" style="margin:6px 0 4px"><b>🔌 活动连接（'+conns.length+'）· <span style="color:#e05252">红色 = 非中国大陆 IP</span></b></div><div style="overflow:auto;max-height:230px"><table><thead><tr><th>来源</th><th>来源归属地</th><th>目标</th><th>目标归属地</th><th>协议</th><th>入口</th><th>出口</th><th>已连接</th></tr></thead><tbody>';
     conns.forEach(function(c){
-      h+='<tr><td class="mono">'+esc(c.client)+'</td><td class="mono">'+esc(c.target)+'</td><td>'+esc(c.proto)+'</td><td>'+fmtBytes(c.up)+'</td><td>'+fmtBytes(c.down)+'</td><td>'+durHuman(c.start)+'</td></tr>';
+      h+='<tr><td class="mono">'+esc(c.client)+'</td><td>'+geoCell(c.client)+'</td><td class="mono">'+esc(c.target)+'</td><td>'+geoCell(hostOf(c.target))+'</td><td>'+esc(c.proto)+'</td><td>'+fmtBytes(c.up)+'</td><td>'+fmtBytes(c.down)+'</td><td>'+durHuman(c.start)+'</td></tr>';
     });
     h+='</tbody></table></div>';
   }
   if(ips.length){
-    h+='<div class="hint" style="margin:10px 0 4px"><b>📍 按来源 IP 汇总</b></div><div style="overflow:auto;max-height:230px"><table><thead><tr><th>IP</th><th>连接数</th><th>入口</th><th>出口</th><th>最近活动</th></tr></thead><tbody>';
+    h+='<div class="hint" style="margin:10px 0 4px"><b>📍 按来源 IP 汇总</b></div><div style="overflow:auto;max-height:230px"><table><thead><tr><th>IP</th><th>归属地</th><th>连接数</th><th>入口</th><th>出口</th><th>最近活动</th></tr></thead><tbody>';
     ips.slice().sort(function(a,b){return (b.up+b.down)-(a.up+a.down)}).forEach(function(p){
-      h+='<tr><td class="mono">'+esc(p.ip)+'</td><td>'+p.conns+'</td><td>'+fmtBytes(p.up)+'</td><td>'+fmtBytes(p.down)+'</td><td>'+relTime(p.last)+'</td></tr>';
+      h+='<tr><td class="mono">'+esc(p.ip)+'</td><td>'+geoCell(p.ip)+'</td><td>'+p.conns+'</td><td>'+fmtBytes(p.up)+'</td><td>'+fmtBytes(p.down)+'</td><td>'+relTime(p.last)+'</td></tr>';
     });
     h+='</tbody></table></div>';
   }
   if(!conns.length&&!ips.length)h+='<div class="hint">暂无连接记录。配置好客户端后，这里会实时显示来源 IP、目标地址与出入流量。</div>';
   el.innerHTML=h;
+  var all=[];
+  conns.forEach(function(c){all.push(c.client);all.push(hostOf(c.target))});
+  ips.forEach(function(p){all.push(p.ip)});
+  geoLookup(all,function(f){if(f)renderProxyStats()});
 }
 function renderProxyHelp(){
   var el=$('px-help');if(!el)return;
@@ -1411,7 +1443,8 @@ function renderProxyHelp(){
       +'<button class="btn sm primary" onclick="copyText(state.proxy.clash_yaml,\'Clash 配置已复制\')">📋 复制配置</button>'
       +'<button class="btn sm" onclick="copyText(state.proxy.sub_url,\'订阅链接已复制\')">🔗 复制订阅链接</button>'
       +'<a class="btn sm" href="'+esc(d.sub_url)+'&download=1">⬇ 下载 clash-rtp.yaml</a></div>'
-      +'<div class="form-row" style="margin-top:12px"><label>订阅链接（Clash → Profiles → URL 导入）</label><input readonly value="'+esc(d.sub_url)+'" onclick="this.select()"></div>'
+      +'<div class="form-row" style="margin-top:12px"><label>订阅链接（Clash → Profiles → URL 导入；带 :8080 与不带端口两种写法均可）</label><input readonly value="'+esc(d.sub_url)+'" onclick="this.select()"></div>'
+      +'<div class="form-row"><input readonly value="'+esc((d.sub_url||'').replace(':8080',''))+'" onclick="this.select()"></div>'
       +'<div class="hint">订阅链接含管理员令牌，请勿泄露；如服务端 Web 端口未对公网开放，请在本机或内网环境使用。</div>';
   }else{
     h+='<div class="hint">启用代理网关并配置端口后，这里会自动生成 Clash 配置与订阅链接。</div>';
@@ -1430,7 +1463,7 @@ function renderProxyHelp(){
     +'<a class="btn sm" target="_blank" href="https://github.com/clash-verge-rev/clash-verge-rev/releases">🪟🍎🐧 Clash Verge Rev</a>'
     +'<a class="btn sm" target="_blank" href="https://github.com/MetaCubeX/ClashMetaForAndroid/releases">📲 Android Clash Meta</a>'
     +'</div><div class="hint" style="margin-top:10px">⚠️ 代理网关已强制鉴权；所有流量都会经你的服务端出口，请勿把账号密码或订阅链接透露给他人。</div>'
-    +'<div class="hint">💡 HTTP 代理默认关闭；如需给只支持 HTTP 代理的软件使用，可在左上方配置 HTTP 端口开启。</div></div>'
+    +'<div class="hint">💡 HTTP 代理默认关闭；开启后<b>无需账号密码</b>，在系统/浏览器代理直接填 <span class="mono">服务端IP:HTTP端口</span> 即可使用。免密公开代理有被滥用风险，建议临时开启、用完即关。</div></div>'
     +'</div>';
   el.innerHTML=h;
 }
