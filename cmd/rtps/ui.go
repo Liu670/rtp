@@ -1373,7 +1373,7 @@ function proxySave(){
   .then(function(){toast('代理配置已保存并生效');proxyLoad(true)})
   .catch(function(e){toast(e.message||'保存失败','err')});
 }
-function durHuman(ts){var s=Math.max(0,Math.floor(Date.now()/1000-ts));if(s<60)return s+' 秒';if(s<3600)return Math.floor(s/60)+' 分钟';return Math.floor(s/3600)+' 小时 '+Math.floor((s%3600)/60)+' 分'}
+function durHuman(ts){var s=Math.max(0,Math.floor(Date.now()/1000-ts));if(s<60)return s+' 秒';if(s<3600)return Math.floor(s/60)+' 分钟';return Math.floor(s/3600)+' 小时 '+Math.floor((s%%3600)/60)+' 分'}
 function renderProxyStats(){
   var el=$('px-stats');if(!el)return;
   var st=(state.proxy||{}).stats||{};
