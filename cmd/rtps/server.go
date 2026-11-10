@@ -120,6 +120,7 @@ type Server struct {
 	running bool
 	// SOCKS5 局域网网关监听（ProxyEnabled 且 ProxyPort>0 时启用）
 	socksLn net.Listener
+	socksTLSLn net.Listener
 	// HTTP 代理网关监听（ProxyEnabled 且 ProxyHTTPPort>0 时启用）
 	httpLn net.Listener
 	// 代理网关实时统计（连接明细 / 来源 IP / 出入流量）
@@ -286,6 +287,10 @@ func (s *Server) Stop() {
 		_ = s.httpLn.Close()
 		s.httpLn = nil
 	}
+	if s.socksTLSLn != nil {
+		_ = s.socksTLSLn.Close()
+		s.socksTLSLn = nil
+	}
 	core.LogEvent("admin", "warn", "服务端已停止（GUI 操作）")
 }
 
@@ -295,11 +300,14 @@ func (s *Server) applyProxyConfig() {
 	s.mu.Lock()
 	socksOn := s.cfg.ProxyEnabled && s.cfg.ProxyPort > 0
 	httpOn := s.cfg.ProxyEnabled && s.cfg.ProxyHTTPPort > 0
+	tlsOn := s.cfg.ProxyEnabled && s.cfg.ProxyTLSPort > 0
 	socksAddr := fmt.Sprintf(":%d", s.cfg.ProxyPort)
 	httpAddr := fmt.Sprintf(":%d", s.cfg.ProxyHTTPPort)
-	var stopSocks, stopHTTP net.Listener
+	tlsAddr := fmt.Sprintf(":%d", s.cfg.ProxyTLSPort)
+	var stopSocks, stopHTTP, stopTLS net.Listener
 	startSocks := socksOn && (s.socksLn == nil || s.socksLn.Addr().String() != socksAddr)
 	startHTTP := httpOn && (s.httpLn == nil || s.httpLn.Addr().String() != httpAddr)
+	startTLS := tlsOn && (s.socksTLSLn == nil || s.socksTLSLn.Addr().String() != tlsAddr)
 	if s.socksLn != nil && (!socksOn || s.socksLn.Addr().String() != socksAddr) {
 		stopSocks = s.socksLn
 		s.socksLn = nil
@@ -307,6 +315,10 @@ func (s *Server) applyProxyConfig() {
 	if s.httpLn != nil && (!httpOn || s.httpLn.Addr().String() != httpAddr) {
 		stopHTTP = s.httpLn
 		s.httpLn = nil
+	}
+	if s.socksTLSLn != nil && (!tlsOn || s.socksTLSLn.Addr().String() != tlsAddr) {
+		stopTLS = s.socksTLSLn
+		s.socksTLSLn = nil
 	}
 	s.mu.Unlock()
 
@@ -318,11 +330,18 @@ func (s *Server) applyProxyConfig() {
 		_ = stopHTTP.Close()
 		core.LogEvent("admin", "info", "HTTP 代理已停止")
 	}
+	if stopTLS != nil {
+		_ = stopTLS.Close()
+		core.LogEvent("admin", "info", "TLS SOCKS5 网关已停止")
+	}
 	if startSocks {
 		go s.serveSOCKS5(socksAddr)
 	}
 	if startHTTP {
 		go s.serveHTTPProxy(httpAddr)
+	}
+	if startTLS {
+		go s.serveSOCKS5TLS(tlsAddr)
 	}
 }
 

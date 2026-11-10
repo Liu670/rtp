@@ -1321,10 +1321,12 @@ function viewProxy(){
       +'<div class="form-row"><label>SOCKS5 端口（TCP+UDP，推荐）</label><input id="px-socks" placeholder="例如 7003，0 或留空 = 关闭"></div>'
       +'<div class="form-row"><label>HTTP 代理（默认关闭，开启后免密码直连）</label><select id="px-http-mode" onchange="renderPxHttp()"><option value="0">关闭（默认）</option><option value="1">开启（无需账号密码）</option></select></div>'
       +'<div class="form-row" id="px-http-row" style="display:none"><label>HTTP 代理端口</label><input id="px-http" placeholder="例如 7004"></div>'
+      +'<div class="form-row"><label>TLS 加密 SOCKS5 端口（跨境服务器强烈推荐，防明文协议被封）</label><input id="px-tls" placeholder="0 或留空 = 关闭；例如 10038"></div>'
       +'<div class="form-row"><label>鉴权方式</label><select id="px-mode" onchange="renderPxAuth()"><option value="token">管理员令牌（推荐）</option><option value="custom">自定义账号密码</option></select></div>'
       +'<div id="px-auth"></div>'
       +'<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn primary" onclick="proxySave()">保存并即时生效</button><span id="px-run" class="chip"></span></div>'
       +'<div class="hint" style="margin-top:8px">SOCKS5 支持 CONNECT 与 UDP 中继，需账号密码（令牌或自定义）；HTTP 代理免密码，开启后直接在系统代理填 <span class="mono">服务端IP:HTTP端口</span> 即可使用。修改保存后立即生效，无需重启服务端；端口不能与 Web / 控制 / 工作等端口或已有隧道端口冲突。</div>'
+      +'<div class="hint" style="margin-top:6px">🔒 <b>TLS 端口说明</b>：明文 SOCKS5/HTTP 协议在跨境链路（大陆→境外）会被识别为代理并导致端口被封（报「连接被拒」）。TLS 端口对外表现为普通加密流量，可长期稳定使用。Clash 节点已自动带 <span class="mono">tls: true</span>。境内服务器无需开启。</div>'
       +'<div class="hint" style="margin-top:6px;color:var(--warn,#d80)">⚠ 免密 HTTP 代理属于公开代理，任何人知道地址都能借用你的服务端出口，请仅在需要时临时开启、用完即关。</div>'
     +'</div>'
     +'<div class="card glass"><div class="card-head">📊 流量统计与连接监控 <span class="mini-link" onclick="proxyPoll()">刷新 →</span></div><div id="px-stats" class="hint">加载中…</div></div>'
@@ -1347,6 +1349,7 @@ function renderProxyRun(){
   var run=$('px-run');if(!run)return;
   var d=state.proxy||{};
   var h=d.socks_running?'<b style="color:var(--ok)">🟢 SOCKS5 :'+esc(d.socks_port||'-')+'</b>':'⚫ SOCKS5 未运行';
+  if(d.tls_port>0)h+=' ｜ '+(d.tls_running?'<b style="color:var(--ok)">🟢 TLS :'+esc(d.tls_port)+'</b>':'<span style="color:var(--warn)">⚠ TLS 未运行</span>');
   if(d.http_port>0)h+=' ｜ '+(d.http_running?'<b style="color:var(--ok)">🟢 HTTP :'+esc(d.http_port)+'</b>':'<span style="color:var(--warn)">⚠ HTTP 未运行</span>');
   run.innerHTML=h;
 }
@@ -1356,6 +1359,7 @@ function renderProxyForm(){
   $('px-socks').value=d.socks_port||'';
   $('px-http-mode').value=(d.http_port&&d.http_port>0)?'1':'0';
   $('px-http').value=d.http_port||'';
+  $('px-tls').value=d.tls_port||'';
   renderPxHttp();
   $('px-mode').value=d.use_token?'token':'custom';
 }
@@ -1378,6 +1382,7 @@ function proxySave(){
   var hmode=$('px-http-mode')&&$('px-http-mode').value==='1';
   var hp=parseInt($('px-http').value,10);
   body.http_port=hmode?(isNaN(hp)||hp<=0?7004:hp):0;
+  var tp=parseInt($('px-tls').value,10);body.tls_port=isNaN(tp)?0:tp;
   if(body.mode==='custom'){
     body.user=($('px-user')?$('px-user').value:'').trim();
     body.pass=($('px-pass')?$('px-pass').value:'');

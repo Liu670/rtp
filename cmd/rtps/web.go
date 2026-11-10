@@ -893,6 +893,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 			Enabled   *bool  `json:"enabled"`
 			SocksPort *int   `json:"socks_port"`
 			HTTPPort  *int   `json:"http_port"`
+			TLSPort   *int   `json:"tls_port"`
 			Mode      string `json:"mode"` // token / custom
 			User      string `json:"user"`
 			Pass      string `json:"pass"`
@@ -901,7 +902,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad body", http.StatusBadRequest)
 			return
 		}
-		socksPort, httpPort := s.cfg.ProxyPort, s.cfg.ProxyHTTPPort
+		socksPort, httpPort, tlsPort := s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, s.cfg.ProxyTLSPort
 		if in.SocksPort != nil {
 			if *in.SocksPort < 0 || *in.SocksPort > 65535 {
 				http.Error(w, "SOCKS5 端口无效", http.StatusBadRequest)
@@ -915,6 +916,13 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			httpPort = *in.HTTPPort
+		}
+		if in.TLSPort != nil {
+			if *in.TLSPort < 0 || *in.TLSPort > 65535 {
+				http.Error(w, "TLS 端口无效", http.StatusBadRequest)
+				return
+			}
+			tlsPort = *in.TLSPort
 		}
 		// 端口冲突检查：与其他固定端口及已有隧道公网端口互斥
 		taken := map[int]string{
@@ -934,6 +942,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(taken, s.cfg.ProxyPort)     // 原值自身不算冲突
 		delete(taken, s.cfg.ProxyHTTPPort) // 端口对调的合法场景
+		delete(taken, s.cfg.ProxyTLSPort)
 		if socksPort > 0 {
 			if other, ok := taken[socksPort]; ok && socksPort != httpPort {
 				http.Error(w, fmt.Sprintf("SOCKS5 端口 %d 已被占用（%s）", socksPort, other), http.StatusBadRequest)
@@ -948,6 +957,14 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 		if socksPort > 0 && httpPort > 0 && socksPort == httpPort {
 			http.Error(w, "SOCKS5 与 HTTP 代理端口不能相同", http.StatusBadRequest)
+			return
+		}
+		if tlsPort > 0 && (tlsPort == socksPort || tlsPort == httpPort) {
+			http.Error(w, "TLS 端口不能与 SOCKS5/HTTP 端口相同", http.StatusBadRequest)
+			return
+		}
+		if other, ok := taken[tlsPort]; tlsPort > 0 && ok {
+			http.Error(w, fmt.Sprintf("TLS 端口 %d 已被占用（%s）", tlsPort, other), http.StatusBadRequest)
 			return
 		}
 		user, pass := s.cfg.ProxyUser, s.cfg.ProxyPass
@@ -968,7 +985,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		if in.Enabled != nil {
 			enabled = *in.Enabled
 		}
-		if enabled && socksPort == 0 && httpPort == 0 {
+		if enabled && socksPort == 0 && httpPort == 0 && tlsPort == 0 {
 			http.Error(w, "已开启代理网关但未配置任何端口", http.StatusBadRequest)
 			return
 		}
@@ -977,12 +994,13 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		s.cfg.ProxyEnabled = enabled
 		s.cfg.ProxyPort = socksPort
 		s.cfg.ProxyHTTPPort = httpPort
+		s.cfg.ProxyTLSPort = tlsPort
 		s.cfg.ProxyUser = user
 		s.cfg.ProxyPass = pass
 		s.mu.Unlock()
 		s.applyProxyConfig()
 		s.saveConfig()
-		core.LogEvent("admin", "ok", fmt.Sprintf("代理网关配置已更新：开关=%v SOCKS5=%d HTTP=%d 鉴权=%s", enabled, socksPort, httpPort, orDefaultName(in.Mode, "token")))
+		core.LogEvent("admin", "ok", fmt.Sprintf("代理网关配置已更新：开关=%v SOCKS5=%d HTTP=%d TLS=%d 鉴权=%s", enabled, socksPort, httpPort, tlsPort, orDefaultName(in.Mode, "token")))
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -994,10 +1012,12 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 	s.mu.Lock()
 	enabled := s.cfg.ProxyEnabled
 	socksPort, httpPort := s.cfg.ProxyPort, s.cfg.ProxyHTTPPort
+	tlsPort := s.cfg.ProxyTLSPort
 	user, pass := s.cfg.ProxyUser, s.cfg.ProxyPass
 	webPort := s.cfg.WebPort
 	socksRunning := s.socksLn != nil
 	httpRunning := s.httpLn != nil
+	tlsRunning := s.socksTLSLn != nil
 	s.mu.Unlock()
 
 	host := publicHostFromReq(r)
@@ -1008,11 +1028,13 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 		"enabled":       enabled,
 		"socks_port":    socksPort,
 		"http_port":     httpPort,
+		"tls_port":      tlsPort,
 		"user":          user,
 		"pass":          pass,
 		"use_token":     user == "" && pass == "",
 		"socks_running": socksRunning,
 		"http_running":  httpRunning,
+		"tls_running":   tlsRunning,
 		"web_port":      webPort,
 		"public_host":   host,
 		"stats":         s.px.snapshot(),
@@ -1025,7 +1047,7 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 		if p == "" {
 			p = s.cfg.AdminToken
 		}
-		out["clash_yaml"] = clashConfigYAML(host, socksPort, httpPort, u, p)
+		out["clash_yaml"] = clashConfigYAML(host, socksPort, httpPort, tlsPort, u, p)
 		out["sub_url"] = fmt.Sprintf("http://%s/api/proxy/clash?token=%s", host, s.cfg.AdminToken)
 	}
 	return out
@@ -1043,7 +1065,7 @@ func (s *Server) handleProxyClash(w http.ResponseWriter, r *http.Request) {
 		host = s.cfg.BaseDomain
 	}
 	u, p := s.proxyCreds()
-	yaml := clashConfigYAML(host, s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, u, p)
+	yaml := clashConfigYAML(host, s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, s.cfg.ProxyTLSPort, u, p)
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	if r.URL.Query().Get("download") == "1" {
 		w.Header().Set("Content-Disposition", "attachment; filename=\"clash-rtp.yaml\"")
@@ -1191,12 +1213,17 @@ func publicHostFromReq(r *http.Request) string {
 }
 
 // clashConfigYAML 生成可直接导入 Clash 的配置
-func clashConfigYAML(host string, socksPort, httpPort int, user, pass string) string {
+func clashConfigYAML(host string, socksPort, httpPort, tlsPort int, user, pass string) string {
 	var names []string
 	var b strings.Builder
 	b.WriteString("# rtp 代理网关 · Clash 配置（由服务端自动生成）\n")
-	b.WriteString("# 导入后请选中 RTP-Server-LAN 节点（建议开启全局模式）\n")
+	b.WriteString("# 跨境（大陆→境外服务器）请优先使用 RTP-Server-TLS 节点：TLS 加密可防止明文代理协议被识别封端口\n")
 	b.WriteString("mixed-port: 7890\nmode: global\nlog-level: info\n\nproxies:\n")
+	if tlsPort > 0 {
+		// TLS 加密节点（推荐，抗 GFW 动态封锁；证书为服务端自签）
+		names = append(names, "RTP-Server-TLS")
+		fmt.Fprintf(&b, "  - name: \"RTP-Server-TLS\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    tls: true\n    skip-cert-verify: true\n    udp: true\n\n", host, tlsPort, user, pass)
+	}
 	if socksPort > 0 {
 		names = append(names, "RTP-Server-LAN")
 		fmt.Fprintf(&b, "  - name: \"RTP-Server-LAN\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    udp: true\n\n", host, socksPort, user, pass)
