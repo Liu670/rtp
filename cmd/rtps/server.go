@@ -204,10 +204,11 @@ func (s *Server) clientOf(id string) *ClientState {
 // loadConfig 读取配置，未指定时给默认值；文件不存在则生成随机管理员令牌
 func loadConfig(path string) Config {
 	cfg := Config{ControlPort: 7000, WorkPort: 7001, WebPort: 8080}
+	var raw map[string]json.RawMessage
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &cfg)
 		// 旧版本兼容：配置里没有 proxy_enabled 字段但已配置 proxy_port 时，视为已开启
-		var raw map[string]json.RawMessage
+		raw = map[string]json.RawMessage{}
 		if json.Unmarshal(data, &raw) == nil {
 			if _, ok := raw["proxy_enabled"]; !ok && cfg.ProxyPort > 0 {
 				cfg.ProxyEnabled = true
@@ -224,7 +225,11 @@ func loadConfig(path string) Config {
 		cfg.WebPort = 8080
 	}
 	if cfg.P2pPort == 0 {
-		cfg.P2pPort = cfg.ControlPort + 2
+		if _, ok := raw["p2p_port"]; ok {
+			// 配置文件显式写 p2p_port: 0 → 禁用 P2P 信令（避免与代理网关 UDP 端口冲突）
+		} else {
+			cfg.P2pPort = cfg.ControlPort + 2
+		}
 	}
 	if cfg.AdminToken == "" {
 		cfg.AdminToken = core.RandID()
