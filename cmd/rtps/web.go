@@ -1213,10 +1213,7 @@ func clashConfigYAML(host string, socksPort, httpPort int, user, pass string) st
 	for _, n := range names {
 		fmt.Fprintf(&b, "      - \"%s\"\n", n)
 	}
-	b.WriteString("\nrules:\n")
-	for _, n := range names {
-		fmt.Fprintf(&b, "  - \"MATCH,%s\"\n", n)
-	}
+	b.WriteString("\nrules:\n  - \"MATCH,PROXY\"\n")
 	return b.String()
 }
 
