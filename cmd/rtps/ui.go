@@ -1319,6 +1319,7 @@ function viewProxy(){
     +'<div class="card glass"><div class="card-head">⚙️ 开关 · 端口 · 鉴权</div>'
       +'<div class="form-row"><label>代理网关</label><select id="px-enabled"><option value="1">开启</option><option value="0">关闭</option></select></div>'
       +'<div class="form-row"><label>SOCKS5 端口（TCP+UDP，推荐）</label><input id="px-socks" placeholder="例如 7003，0 或留空 = 关闭"></div>'
+      +'<div class="form-row"><label>SOCKS5 对外端口（NAT 端口映射后的外部端口号，选填）</label><input id="px-socks-pub" placeholder="留空 = 与上面端口相同；例如 10036"></div>'
       +'<div class="form-row"><label>HTTP 代理（默认关闭，开启后免密码直连）</label><select id="px-http-mode" onchange="renderPxHttp()"><option value="0">关闭（默认）</option><option value="1">开启（无需账号密码）</option></select></div>'
       +'<div class="form-row" id="px-http-row" style="display:none"><label>HTTP 代理端口</label><input id="px-http" placeholder="例如 7004"></div>'
       +'<div class="form-row"><label>TLS 加密 SOCKS5 端口（跨境服务器强烈推荐，防明文协议被封）</label><input id="px-tls" placeholder="0 或留空 = 关闭；例如 7002"></div>'
@@ -1349,7 +1350,7 @@ function proxyPoll(){
 function renderProxyRun(){
   var run=$('px-run');if(!run)return;
   var d=state.proxy||{};
-  var h=d.socks_running?'<b style="color:var(--ok)">🟢 SOCKS5 :'+esc(d.socks_port||'-')+'</b>':'⚫ SOCKS5 未运行';
+  var h=d.socks_running?'<b style="color:var(--ok)">🟢 SOCKS5 :'+esc(d.socks_port||'-')+(d.socks_public_port&&d.socks_public_port!==d.socks_port?'→'+d.socks_public_port:'')+'</b>':'⚫ SOCKS5 未运行';
   if(d.tls_port>0){var tlsTxt=':'+d.tls_port;if(d.tls_public_port&&d.tls_public_port!==d.tls_port)tlsTxt+='→'+d.tls_public_port;h+=' ｜ '+(d.tls_running?'<b style="color:var(--ok)">🟢 TLS '+esc(tlsTxt)+'</b>':'<span style="color:var(--warn)">⚠ TLS 未运行</span>')}
   if(d.http_port>0)h+=' ｜ '+(d.http_running?'<b style="color:var(--ok)">🟢 HTTP :'+esc(d.http_port)+'</b>':'<span style="color:var(--warn)">⚠ HTTP 未运行</span>');
   run.innerHTML=h;
@@ -1358,6 +1359,7 @@ function renderProxyForm(){
   var d=state.proxy||{};if(!$('px-enabled'))return;
   $('px-enabled').value=d.enabled?'1':'0';
   $('px-socks').value=d.socks_port||'';
+  $('px-socks-pub').value=d.socks_public_port||'';
   $('px-http-mode').value=(d.http_port&&d.http_port>0)?'1':'0';
   $('px-http').value=d.http_port||'';
   $('px-tls').value=d.tls_port||'';
@@ -1381,6 +1383,7 @@ function proxySave(){
   var body={mode:$('px-mode').value};
   body.enabled=$('px-enabled').value==='1';
   var sp=parseInt($('px-socks').value,10);body.socks_port=isNaN(sp)?0:sp;
+  var spp=parseInt($('px-socks-pub').value,10);body.socks_public_port=isNaN(spp)?0:spp;
   var hmode=$('px-http-mode')&&$('px-http-mode').value==='1';
   var hp=parseInt($('px-http').value,10);
   body.http_port=hmode?(isNaN(hp)||hp<=0?7004:hp):0;

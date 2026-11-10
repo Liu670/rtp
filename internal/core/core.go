@@ -102,6 +102,7 @@ type Config struct {
 	P2pPort     int            `json:"p2p_port"`
 	ProxyEnabled  bool   `json:"proxy_enabled"`   // 代理网关总开关
 	ProxyPort     int    `json:"proxy_port"`      // SOCKS5 网关端口（0=关闭）
+	ProxyPublicPort int  `json:"proxy_public_port"` // SOCKS5 对外端口（NAT 端口映射场景：外部映射号；0=与 proxy_port 相同）
 	ProxyHTTPPort int    `json:"proxy_http_port"` // HTTP 代理端口（0=关闭，默认关闭）
 	ProxyTLSPort      int    `json:"proxy_tls_port"`       // TLS 加密 SOCKS5 端口（0=关闭；跨境抗封锁推荐开启）
 	ProxyTLSPublicPort int   `json:"proxy_tls_public_port"` // TLS 对外端口（NAT 端口映射场景：外部映射号；0=与 proxy_tls_port 相同）

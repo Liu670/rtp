@@ -227,6 +227,7 @@ func readSocksAddr(conn net.Conn, atyp byte) (string, error) {
 func (s *Server) socksConnect(conn net.Conn, target string) {
 	remote, err := net.DialTimeout("tcp", target, 15*time.Second)
 	if err != nil {
+		log.Printf("[socks5] CONNECT %s 失败: %v", target, err)
 		rep := byte(socksRepHostUnreach)
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
 			rep = byte(socksRepHostUnreach)
