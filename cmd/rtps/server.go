@@ -121,6 +121,9 @@ type Server struct {
 	// SOCKS5 局域网网关监听（ProxyEnabled 且 ProxyPort>0 时启用）
 	socksLn net.Listener
 	socksTLSLn net.Listener
+	// NAT 兼容的共享 UDP 中继（与 TCP 监听同端口号；DNS over proxy 等场景必需）
+	socksUDPEnv *proxyUDPEnv
+	tlsUDPEnv   *proxyUDPEnv
 	// HTTP 代理网关监听（ProxyEnabled 且 ProxyHTTPPort>0 时启用）
 	httpLn net.Listener
 	// 代理网关实时统计（连接明细 / 来源 IP / 出入流量）

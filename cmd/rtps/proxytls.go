@@ -59,14 +59,26 @@ func (s *Server) serveSOCKS5TLS(addr string) {
 	tlsLn := tls.NewListener(ln, &tls.Config{Certificates: []tls.Certificate{cert}})
 	s.mu.Lock()
 	s.socksTLSLn = tlsLn
+	// NAT 兼容 UDP 中继：共享 UDP socket 与 TCP 同端口；通告端口用对外映射号
+	pubPort := s.cfg.ProxyTLSPort
+	if s.cfg.ProxyTLSPublicPort > 0 {
+		pubPort = s.cfg.ProxyTLSPublicPort
+	}
+	s.tlsUDPEnv = s.startProxyUDPEnv(portOfAddr(addr), s.cfg.BaseDomain, pubPort)
+	udpEnv := s.tlsUDPEnv
 	s.mu.Unlock()
 	log.Printf("[socks5-tls] TLS 加密网关已开启: %s", addr)
 	core.LogEvent("admin", "ok", fmt.Sprintf("TLS 加密 SOCKS5 网关已开启: %s", addr))
 	for {
 		c, err := tlsLn.Accept()
 		if err != nil {
+			s.mu.Lock()
+			e := s.tlsUDPEnv
+			s.tlsUDPEnv = nil
+			s.mu.Unlock()
+			e.stop()
 			return
 		}
-		go s.handleSOCKS5(c)
+		go s.handleSOCKS5(c, udpEnv)
 	}
 }

@@ -58,19 +58,37 @@ func (s *Server) serveSOCKS5(addr string) {
 	}
 	s.mu.Lock()
 	s.socksLn = ln
+	// NAT 兼容 UDP 中继：共享 UDP socket 与 TCP 同端口；通告端口用配置值（NAT 映射号）
+	s.socksUDPEnv = s.startProxyUDPEnv(portOfAddr(addr), s.cfg.BaseDomain, s.cfg.ProxyPort)
+	udpEnv := s.socksUDPEnv
 	s.mu.Unlock()
 	log.Printf("[socks5] 局域网网关已开启: %s", addr)
 	core.LogEvent("admin", "ok", fmt.Sprintf("SOCKS5 局域网网关已开启: %s", addr))
 	for {
 		c, err := ln.Accept()
 		if err != nil {
+			s.mu.Lock()
+			e := s.socksUDPEnv
+			s.socksUDPEnv = nil
+			s.mu.Unlock()
+			e.stop()
 			return
 		}
-		go s.handleSOCKS5(c)
+		go s.handleSOCKS5(c, udpEnv)
 	}
 }
 
-func (s *Server) handleSOCKS5(conn net.Conn) {
+// portOfAddr 从 ":7002" 形式的监听地址解析端口号
+func portOfAddr(addr string) int {
+	_, ps, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0
+	}
+	p, _ := strconv.Atoi(ps)
+	return p
+}
+
+func (s *Server) handleSOCKS5(conn net.Conn, udpEnv *proxyUDPEnv) {
 	defer conn.Close()
 	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
@@ -123,7 +141,11 @@ func (s *Server) handleSOCKS5(conn net.Conn) {
 	case socksCmdConnect:
 		s.socksConnect(conn, target)
 	case socksCmdUDPAssoc:
-		s.socksUDPAssociate(conn)
+		if udpEnv != nil {
+			s.socksUDPAssociateShared(conn, udpEnv)
+		} else {
+			s.socksUDPAssociate(conn) // 无共享中继时退化为本地模式（直连场景可用）
+		}
 	default:
 		socksReply(conn, socksRepCmdNotSup, nil)
 	}
