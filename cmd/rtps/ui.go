@@ -1455,9 +1455,8 @@ function renderProxyHelp(){
       +'<button class="btn sm primary" onclick="copyText(state.proxy.clash_yaml,\'Clash 配置已复制\')">📋 复制配置</button>'
       +'<button class="btn sm" onclick="copyText(state.proxy.sub_url,\'订阅链接已复制\')">🔗 复制订阅链接</button>'
       +'<a class="btn sm" href="'+esc(d.sub_url)+'&download=1">⬇ 下载 clash-rtp.yaml</a></div>'
-      +'<div class="form-row" style="margin-top:12px"><label>订阅链接（Clash → Profiles → URL 导入；带 :8080 与不带端口两种写法均可）</label><input readonly value="'+esc(d.sub_url)+'" onclick="this.select()"></div>'
-      +'<div class="form-row"><input readonly value="'+esc((d.sub_url||'').replace(':8080',''))+'" onclick="this.select()"></div>'
-      +'<div class="hint">订阅链接含管理员令牌，请勿泄露；如服务端 Web 端口未对公网开放，请在本机或内网环境使用。</div>';
+      +'<div class="form-row" style="margin-top:12px"><label>订阅链接（Clash → Profiles → URL 导入）</label><input readonly value="'+esc(d.sub_url)+'" onclick="this.select()"></div>'
+      +'<div class="hint">订阅链接自动携带你当前访问控制台用的地址和端口（如 <span class="mono">:10027</span>），直接复制导入即可；链接含管理员令牌，请勿泄露。</div>';
   }else{
     h+='<div class="hint">启用代理网关并配置端口后，这里会自动生成 Clash 配置与订阅链接。</div>';
   }

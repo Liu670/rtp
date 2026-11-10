@@ -1062,7 +1062,7 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 		if p == "" {
 			p = s.cfg.AdminToken
 		}
-		out["clash_yaml"] = clashConfigYAML(host, socksPort, httpPort, tlsPubPort, u, p)
+		out["clash_yaml"] = clashConfigYAML(hostOnly(host), socksPort, httpPort, tlsPubPort, u, p)
 		out["sub_url"] = fmt.Sprintf("http://%s/api/proxy/clash?token=%s", host, s.cfg.AdminToken)
 	}
 	return out
@@ -1084,7 +1084,7 @@ func (s *Server) handleProxyClash(w http.ResponseWriter, r *http.Request) {
 	if tlsPubPort <= 0 {
 		tlsPubPort = s.cfg.ProxyTLSPort
 	}
-	yaml := clashConfigYAML(host, s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, tlsPubPort, u, p)
+	yaml := clashConfigYAML(hostOnly(host), s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, tlsPubPort, u, p)
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	if r.URL.Query().Get("download") == "1" {
 		w.Header().Set("Content-Disposition", "attachment; filename=\"clash-rtp.yaml\"")
@@ -1215,17 +1215,11 @@ func queryGeoBatch(ips []string) map[string]pxGeoEntry {
 	return out
 }
 
-// publicHostFromReq 从请求 Host 推断服务端对外地址（去掉端口；回环地址回退 base_domain）
+// publicHostFromReq 从请求 Host 推断服务端对外地址（保留端口：NAT 映射场景下
+// 订阅链接必须带访问端口，如 http://IP:10027/...；回环地址回退 base_domain）
 func publicHostFromReq(r *http.Request) string {
-	h := r.Host
-	if i := strings.LastIndex(h, ":"); i >= 0 && !strings.Contains(strings.TrimPrefix(h, "["), "]") {
-		// IPv6 [::1]:8080 或 host:port
-		if !strings.HasPrefix(h, "[") || strings.Contains(h, "]") {
-			h = h[:i]
-		}
-	}
-	h = strings.Trim(h, "[]")
-	if h == "" || h == "127.0.0.1" || h == "localhost" || h == "::1" {
+	h := strings.TrimSpace(r.Host)
+	if hostOnly(h) == "" || hostOnly(h) == "127.0.0.1" || hostOnly(h) == "localhost" || hostOnly(h) == "::1" {
 		return ""
 	}
 	return h
