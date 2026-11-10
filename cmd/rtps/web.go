@@ -1001,6 +1001,9 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 	s.mu.Unlock()
 
 	host := publicHostFromReq(r)
+	if host == "" {
+		host = s.cfg.BaseDomain
+	}
 	out := map[string]any{
 		"enabled":       enabled,
 		"socks_port":    socksPort,
@@ -1036,6 +1039,9 @@ func (s *Server) handleProxyClash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	host := publicHostFromReq(r)
+	if host == "" {
+		host = s.cfg.BaseDomain
+	}
 	u, p := s.proxyCreds()
 	yaml := clashConfigYAML(host, s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, u, p)
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
