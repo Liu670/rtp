@@ -894,6 +894,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 			SocksPort *int   `json:"socks_port"`
 			HTTPPort  *int   `json:"http_port"`
 			TLSPort   *int   `json:"tls_port"`
+			TLSPublicPort *int `json:"tls_public_port"` // NAT 映射后的对外端口，0=与 tls_port 相同
 			Mode      string `json:"mode"` // token / custom
 			User      string `json:"user"`
 			Pass      string `json:"pass"`
@@ -903,6 +904,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		socksPort, httpPort, tlsPort := s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, s.cfg.ProxyTLSPort
+		tlsPubPort := s.cfg.ProxyTLSPublicPort
 		if in.SocksPort != nil {
 			if *in.SocksPort < 0 || *in.SocksPort > 65535 {
 				http.Error(w, "SOCKS5 端口无效", http.StatusBadRequest)
@@ -923,6 +925,13 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			tlsPort = *in.TLSPort
+		}
+		if in.TLSPublicPort != nil {
+			if *in.TLSPublicPort < 0 || *in.TLSPublicPort > 65535 {
+				http.Error(w, "TLS 对外端口无效", http.StatusBadRequest)
+				return
+			}
+			tlsPubPort = *in.TLSPublicPort
 		}
 		// 端口冲突检查：与其他固定端口及已有隧道公网端口互斥
 		taken := map[int]string{
@@ -995,6 +1004,7 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		s.cfg.ProxyPort = socksPort
 		s.cfg.ProxyHTTPPort = httpPort
 		s.cfg.ProxyTLSPort = tlsPort
+		s.cfg.ProxyTLSPublicPort = tlsPubPort
 		s.cfg.ProxyUser = user
 		s.cfg.ProxyPass = pass
 		s.mu.Unlock()
@@ -1013,6 +1023,10 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 	enabled := s.cfg.ProxyEnabled
 	socksPort, httpPort := s.cfg.ProxyPort, s.cfg.ProxyHTTPPort
 	tlsPort := s.cfg.ProxyTLSPort
+	tlsPubPort := s.cfg.ProxyTLSPublicPort
+	if tlsPubPort <= 0 {
+		tlsPubPort = tlsPort // 未配置对外端口时与内部端口一致
+	}
 	user, pass := s.cfg.ProxyUser, s.cfg.ProxyPass
 	webPort := s.cfg.WebPort
 	socksRunning := s.socksLn != nil
@@ -1029,6 +1043,7 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 		"socks_port":    socksPort,
 		"http_port":     httpPort,
 		"tls_port":      tlsPort,
+		"tls_public_port": tlsPubPort,
 		"user":          user,
 		"pass":          pass,
 		"use_token":     user == "" && pass == "",
@@ -1047,7 +1062,7 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 		if p == "" {
 			p = s.cfg.AdminToken
 		}
-		out["clash_yaml"] = clashConfigYAML(host, socksPort, httpPort, tlsPort, u, p)
+		out["clash_yaml"] = clashConfigYAML(host, socksPort, httpPort, tlsPubPort, u, p)
 		out["sub_url"] = fmt.Sprintf("http://%s/api/proxy/clash?token=%s", host, s.cfg.AdminToken)
 	}
 	return out
@@ -1065,7 +1080,11 @@ func (s *Server) handleProxyClash(w http.ResponseWriter, r *http.Request) {
 		host = s.cfg.BaseDomain
 	}
 	u, p := s.proxyCreds()
-	yaml := clashConfigYAML(host, s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, s.cfg.ProxyTLSPort, u, p)
+	tlsPubPort := s.cfg.ProxyTLSPublicPort
+	if tlsPubPort <= 0 {
+		tlsPubPort = s.cfg.ProxyTLSPort
+	}
+	yaml := clashConfigYAML(host, s.cfg.ProxyPort, s.cfg.ProxyHTTPPort, tlsPubPort, u, p)
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	if r.URL.Query().Get("download") == "1" {
 		w.Header().Set("Content-Disposition", "attachment; filename=\"clash-rtp.yaml\"")

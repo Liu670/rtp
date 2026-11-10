@@ -103,7 +103,8 @@ type Config struct {
 	ProxyEnabled  bool   `json:"proxy_enabled"`   // 代理网关总开关
 	ProxyPort     int    `json:"proxy_port"`      // SOCKS5 网关端口（0=关闭）
 	ProxyHTTPPort int    `json:"proxy_http_port"` // HTTP 代理端口（0=关闭，默认关闭）
-	ProxyTLSPort  int    `json:"proxy_tls_port"`  // TLS 加密 SOCKS5 端口（0=关闭；跨境抗封锁推荐开启）
+	ProxyTLSPort      int    `json:"proxy_tls_port"`       // TLS 加密 SOCKS5 端口（0=关闭；跨境抗封锁推荐开启）
+	ProxyTLSPublicPort int   `json:"proxy_tls_public_port"` // TLS 对外端口（NAT 端口映射场景：外部映射号；0=与 proxy_tls_port 相同）
 	ProxyUser     string `json:"proxy_user"`      // 网关鉴权用户名（空=使用管理员令牌）
 	ProxyPass     string `json:"proxy_pass"`      // 网关鉴权密码（空=使用管理员令牌）
 	BaseDomain  string         `json:"base_domain"`
