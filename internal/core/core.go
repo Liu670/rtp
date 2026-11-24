@@ -16,27 +16,27 @@ import (
 
 // Msg 是控制/工作连接上的行协议：每行为一行 JSON + '\n'
 type Msg struct {
-	Type      string         `json:"type"`
-	Token     string         `json:"token,omitempty"`
-	ClientID  string         `json:"client_id,omitempty"`
-	Ok        bool           `json:"ok,omitempty"`
-	Message   string         `json:"message,omitempty"`
-	ConnID    string         `json:"conn_id,omitempty"`
-	TunnelID  string         `json:"tunnel_id,omitempty"`
-	WorkPort  int            `json:"work_port,omitempty"`
-	Tunnels   []TunnelConfig `json:"tunnels,omitempty"`
-	Tunnel    *TunnelConfig  `json:"tunnel,omitempty"`
-	Host      string         `json:"host,omitempty"`  // http host / https sni
-	Data      []byte         `json:"data,omitempty"`  // udp payload (json base64)
-	From      string         `json:"from,omitempty"`  // udp peer addr
-	ServerID  string         `json:"server_id,omitempty"`
+	Type     string         `json:"type"`
+	Token    string         `json:"token,omitempty"`
+	ClientID string         `json:"client_id,omitempty"`
+	Ok       bool           `json:"ok,omitempty"`
+	Message  string         `json:"message,omitempty"`
+	ConnID   string         `json:"conn_id,omitempty"`
+	TunnelID string         `json:"tunnel_id,omitempty"`
+	WorkPort int            `json:"work_port,omitempty"`
+	Tunnels  []TunnelConfig `json:"tunnels,omitempty"`
+	Tunnel   *TunnelConfig  `json:"tunnel,omitempty"`
+	Host     string         `json:"host,omitempty"` // http host / https sni
+	Data     []byte         `json:"data,omitempty"` // udp payload (json base64)
+	From     string         `json:"from,omitempty"` // udp peer addr
+	ServerID string         `json:"server_id,omitempty"`
 	// P2P 相关
-	P2pPort      int    `json:"p2p_port,omitempty"`      // 服务端 P2P 信令 UDP 端口
-	Role         string `json:"role,omitempty"`          // p2p_offer: target / visitor
-	PeerAddr     string `json:"peer_addr,omitempty"`     // 对端 NAT 候选地址
-	VisitorPort  int    `json:"visitor_port,omitempty"`  // visitor 本地监听端口
-	Session      string `json:"session,omitempty"`       // p2p 会话 ID
-	TunnelID2    string `json:"tunnel_id2,omitempty"`     // relay 回退用的第二个隧道 id
+	P2pPort     int    `json:"p2p_port,omitempty"`     // 服务端 P2P 信令 UDP 端口
+	Role        string `json:"role,omitempty"`         // p2p_offer: target / visitor
+	PeerAddr    string `json:"peer_addr,omitempty"`    // 对端 NAT 候选地址
+	VisitorPort int    `json:"visitor_port,omitempty"` // visitor 本地监听端口
+	Session     string `json:"session,omitempty"`      // p2p 会话 ID
+	TunnelID2   string `json:"tunnel_id2,omitempty"`   // relay 回退用的第二个隧道 id
 }
 
 // TunnelConfig 一条隧道规则。proto: tcp / udp / http / https / stcp
@@ -55,7 +55,7 @@ type TunnelConfig struct {
 	Note       string `json:"note"`
 	// P2P 隧道（proto=p2p）：target=当前 ClientID 提供内网服务，visitor=另一客户端作为访问端
 	VisitorClientID string `json:"visitor_client_id"`
-	VisitorPort     int    `json:"visitor_port"` // visitor 本地监听端口
+	VisitorPort     int    `json:"visitor_port"`       // visitor 本地监听端口
 	P2PMode         string `json:"p2p_mode,omitempty"` // direct / relay / punching / waiting（运行时状态）
 }
 
@@ -93,29 +93,29 @@ var EventTypes = map[string]string{
 
 // Config 服务端持久化配置
 type Config struct {
-	AdminToken  string         `json:"admin_token"`
-	ControlPort int            `json:"control_port"`
-	WorkPort    int            `json:"work_port"`
-	WebPort     int            `json:"web_port"`
-	HttpPort    int            `json:"http_port"`
-	HttpsPort   int            `json:"https_port"`
-	P2pPort     int            `json:"p2p_port"`
-	ProxyEnabled  bool   `json:"proxy_enabled"`   // 代理网关总开关
-	ProxyPort     int    `json:"proxy_port"`      // SOCKS5 网关端口（0=关闭）
-	ProxyPublicPort int  `json:"proxy_public_port"` // SOCKS5 对外端口（NAT 端口映射场景：外部映射号；0=与 proxy_port 相同）
-	ProxyHTTPPort int    `json:"proxy_http_port"` // HTTP 代理端口（0=关闭，默认关闭）
-	ProxyTLSPort      int    `json:"proxy_tls_port"`       // TLS 加密 SOCKS5 端口（0=关闭；跨境抗封锁推荐开启）
-	ProxyTLSPublicPort int   `json:"proxy_tls_public_port"` // TLS 对外端口（NAT 端口映射场景：外部映射号；0=与 proxy_tls_port 相同）
-	ProxyUser     string `json:"proxy_user"`      // 网关鉴权用户名（空=使用管理员令牌）
-	ProxyPass     string `json:"proxy_pass"`      // 网关鉴权密码（空=使用管理员令牌）
-	BaseDomain  string         `json:"base_domain"`
-	AdminUser     string `json:"admin_user"`      // 管理后台账号
-	AdminSalt     string `json:"admin_salt"`      // 密码盐
-	AdminPassHash string `json:"admin_pass_hash"` // sha256(salt:pass)
-	Announcement  string `json:"announcement"`   // 登录页/控制台公告
-	Clients     []ClientConfig `json:"clients"`
-	Tunnels     []TunnelConfig `json:"tunnels"`
-	Webhooks    []WebhookConfig `json:"webhooks"`
+	AdminToken         string          `json:"admin_token"`
+	ControlPort        int             `json:"control_port"`
+	WorkPort           int             `json:"work_port"`
+	WebPort            int             `json:"web_port"`
+	HttpPort           int             `json:"http_port"`
+	HttpsPort          int             `json:"https_port"`
+	P2pPort            int             `json:"p2p_port"`
+	ProxyEnabled       bool            `json:"proxy_enabled"`         // 代理网关总开关
+	ProxyPort          int             `json:"proxy_port"`            // SOCKS5 网关端口（0=关闭）
+	ProxyPublicPort    int             `json:"proxy_public_port"`     // SOCKS5 对外端口（NAT 端口映射场景：外部映射号；0=与 proxy_port 相同）
+	ProxyHTTPPort      int             `json:"proxy_http_port"`       // HTTP 代理端口（0=关闭，默认关闭）
+	ProxyTLSPort       int             `json:"proxy_tls_port"`        // TLS 加密 SOCKS5 端口（0=关闭；跨境抗封锁推荐开启）
+	ProxyTLSPublicPort int             `json:"proxy_tls_public_port"` // TLS 对外端口（NAT 端口映射场景：外部映射号；0=与 proxy_tls_port 相同）
+	ProxyUser          string          `json:"proxy_user"`            // 网关鉴权用户名（空=使用管理员令牌）
+	ProxyPass          string          `json:"proxy_pass"`            // 网关鉴权密码（空=使用管理员令牌）
+	BaseDomain         string          `json:"base_domain"`
+	AdminUser          string          `json:"admin_user"`      // 管理后台账号
+	AdminSalt          string          `json:"admin_salt"`      // 密码盐
+	AdminPassHash      string          `json:"admin_pass_hash"` // sha256(salt:pass)
+	Announcement       string          `json:"announcement"`    // 登录页/控制台公告
+	Clients            []ClientConfig  `json:"clients"`
+	Tunnels            []TunnelConfig  `json:"tunnels"`
+	Webhooks           []WebhookConfig `json:"webhooks"`
 }
 
 func ReadMsg(r *bufio.Reader) (Msg, error) {
@@ -186,8 +186,45 @@ func (t *Throttle) maybe(n int64) {
 }
 
 // Pump 在两个连接之间双向搬运字节；counter 非 nil 时累加流量；th 非 nil 时按方向限速
+// pumpBufSize 单次转发的读缓冲。128KB 在高 BDP 链路上显著优于默认 32KB，
+// 减少 Read/Write 系统调用次数与 Go runtime 的调度开销。
+const pumpBufSize = 128 * 1024
+
+// pumpBufPool 复用缓冲区，避免每条连接各自分配 128KB 造成 GC 压力。
+var pumpBufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, pumpBufSize)
+		return &b
+	},
+}
+
+// tuneConn 对底层 TCP 连接做低延迟调优：
+//   - TCP_NODELAY：禁用 Nagle 算法，小包（如 SSH/HTTP 请求头）立即发出，
+//     这对交互式与代理场景的体验影响最大，可减少数十毫秒的合并等待。
+//   - SO_RCVBUF/SO_SNDBUF：显式放大内核socket缓冲，配合系统级 rmem/wmem 上限，
+//     在高延迟跨境链路上提升单连接吞吐。
+func tuneConn(c net.Conn) {
+	tc, ok := c.(*net.TCPConn)
+	if !ok {
+		return
+	}
+	_ = tc.SetNoDelay(true)
+	_ = tc.SetReadBuffer(4 * 1024 * 1024)
+	_ = tc.SetWriteBuffer(4 * 1024 * 1024)
+}
+
 func Pump(dst net.Conn, src io.Reader, counter *int64, th *Throttle) {
-	buf := make([]byte, 32*1024)
+	// 对目标连接做一次低延迟调优（幂等，重复调用无副作用）
+	tuneConn(dst)
+	// 若 src 也是 TCP 连接（双向转发场景），同样调优
+	if sc, ok := src.(net.Conn); ok {
+		tuneConn(sc)
+	}
+
+	bp := pumpBufPool.Get().(*[]byte)
+	buf := *bp
+	defer pumpBufPool.Put(bp)
+
 	for {
 		n, err := src.Read(buf)
 		if n > 0 {

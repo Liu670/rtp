@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
-	"github.com/Liu670/rtp/internal/core"
 	"encoding/json"
 	"fmt"
+	"github.com/Liu670/rtp/internal/core"
 	"log"
 	"net"
 	"net/http"
@@ -142,7 +142,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 			TunnelConfig: tc,
 			ClientName:   s.clientName(t.ClientID),
 			Up:           up, Down: down,
-			Online:       s.clientOnline(t.ClientID),
+			Online: s.clientOnline(t.ClientID),
 		})
 	}
 	s.mu.Unlock()
@@ -154,9 +154,9 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	json.NewEncoder(w).Encode(map[string]any{
-		"admin_token": s.cfg.AdminToken,
-		"clients":     clients,
-		"tunnels":     tunnels,
+		"admin_token":    s.cfg.AdminToken,
+		"clients":        clients,
+		"tunnels":        tunnels,
 		"online_clients": onlineClients,
 		"total_clients":  len(clients),
 		"total_tunnels":  len(tunnels),
@@ -818,7 +818,7 @@ func (s *Server) snapshotForStream() map[string]any {
 			"id": t.ID, "name": t.Name, "proto": t.Proto,
 			"client_id": t.ClientID, "up": up, "down": down,
 			"public_port": t.PublicPort, "online": s.clientOnline(t.ClientID),
-			"enabled": t.Enabled,
+			"enabled":           t.Enabled,
 			"visitor_client_id": t.VisitorClientID, "visitor_port": t.VisitorPort,
 			"p2p_mode": mode,
 		})
@@ -828,7 +828,7 @@ func (s *Server) snapshotForStream() map[string]any {
 		"clients": clients, "tunnels": tunnels,
 		"total_up": totalUp, "total_down": totalDown,
 		"admin_token": s.cfg.AdminToken,
-		"events": core.RecentEvents(),
+		"events":      core.RecentEvents(),
 	}
 }
 
@@ -842,21 +842,21 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	allowed := map[string]bool{
 		// 客户端
-		"rtpc":                        true,
-		"rtpc.exe":                    true,
-		"rtpc-linux":                  true,
-		"rtpc-darwin":                 true,
-		"rtpc-android-arm64":          true,
-		"rtp-android.apk":             true,
-		"rtpc-windows-amd64.exe":      true,
-		"rtpc-windows-cli-amd64.exe":  true,
-		"rtpc-windows-arm64.exe":      true,
-		"rtpc-windows-cli-arm64.exe":  true,
+		"rtpc":                       true,
+		"rtpc.exe":                   true,
+		"rtpc-linux":                 true,
+		"rtpc-darwin":                true,
+		"rtpc-android-arm64":         true,
+		"rtp-android.apk":            true,
+		"rtpc-windows-amd64.exe":     true,
+		"rtpc-windows-cli-amd64.exe": true,
+		"rtpc-windows-arm64.exe":     true,
+		"rtpc-windows-cli-arm64.exe": true,
 		// 服务端
-		"rtps-linux":                  true,
-		"rtps-darwin":                 true,
-		"rtps-windows-amd64.exe":      true,
-		"rtps-windows-cli-amd64.exe":  true,
+		"rtps-linux":                 true,
+		"rtps-darwin":                true,
+		"rtps-windows-amd64.exe":     true,
+		"rtps-windows-cli-amd64.exe": true,
 	}
 	if !allowed[name] {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -890,15 +890,15 @@ func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, s.proxyView(r))
 	case http.MethodPut:
 		var in struct {
-			Enabled   *bool  `json:"enabled"`
-			SocksPort *int   `json:"socks_port"`
-			HTTPPort  *int   `json:"http_port"`
-			TLSPort   *int   `json:"tls_port"`
-			TLSPublicPort *int `json:"tls_public_port"`   // NAT 映射后的对外端口，0=与 tls_port 相同
-			SocksPublicPort *int `json:"socks_public_port"` // SOCKS5 对外端口（NAT 映射号），0=与 socks_port 相同
-			Mode      string `json:"mode"` // token / custom
-			User      string `json:"user"`
-			Pass      string `json:"pass"`
+			Enabled         *bool  `json:"enabled"`
+			SocksPort       *int   `json:"socks_port"`
+			HTTPPort        *int   `json:"http_port"`
+			TLSPort         *int   `json:"tls_port"`
+			TLSPublicPort   *int   `json:"tls_public_port"`   // NAT 映射后的对外端口，0=与 tls_port 相同
+			SocksPublicPort *int   `json:"socks_public_port"` // SOCKS5 对外端口（NAT 映射号），0=与 socks_port 相同
+			Mode            string `json:"mode"`              // token / custom
+			User            string `json:"user"`
+			Pass            string `json:"pass"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, "bad body", http.StatusBadRequest)
@@ -1053,21 +1053,21 @@ func (s *Server) proxyView(r *http.Request) map[string]any {
 		host = s.cfg.BaseDomain
 	}
 	out := map[string]any{
-		"enabled":       enabled,
-		"socks_port":    socksPort,
+		"enabled":           enabled,
+		"socks_port":        socksPort,
 		"socks_public_port": socksPubPort,
-		"http_port":     httpPort,
-		"tls_port":      tlsPort,
-		"tls_public_port": tlsPubPort,
-		"user":          user,
-		"pass":          pass,
-		"use_token":     user == "" && pass == "",
-		"socks_running": socksRunning,
-		"http_running":  httpRunning,
-		"tls_running":   tlsRunning,
-		"web_port":      webPort,
-		"public_host":   host,
-		"stats":         s.px.snapshot(),
+		"http_port":         httpPort,
+		"tls_port":          tlsPort,
+		"tls_public_port":   tlsPubPort,
+		"user":              user,
+		"pass":              pass,
+		"use_token":         user == "" && pass == "",
+		"socks_running":     socksRunning,
+		"http_running":      httpRunning,
+		"tls_running":       tlsRunning,
+		"web_port":          webPort,
+		"public_host":       host,
+		"stats":             s.px.snapshot(),
 	}
 	if host != "" {
 		u, p := user, pass
@@ -1244,35 +1244,102 @@ func publicHostFromReq(r *http.Request) string {
 	return h
 }
 
-// clashConfigYAML 生成可直接导入 Clash 的配置
+// clashConfigYAML 生成可直接导入 Clash 的配置（规则分流版）
+// 优化点：
+//  1. mode: global → rule：国内流量直连，仅境外走代理，显著降低延迟
+//  2. 主用 SOCKS5 明文节点（延迟最稳），TLS 节点作为备用
+//  3. 内置 DNS fake-ip，避免解析慢与 DNS 泄漏
+//  4. 国内常见域名/IP 直连，境外常用站点走代理
 func clashConfigYAML(host string, socksPort, httpPort, tlsPort int, user, pass string) string {
-	var names []string
 	var b strings.Builder
-	b.WriteString("# rtp 代理网关 · Clash 配置（由服务端自动生成）\n")
-	b.WriteString("# 跨境（大陆→境外服务器）请优先使用 RTP-Server-TLS 节点：TLS 加密可防止明文代理协议被识别封端口\n")
-	b.WriteString("mixed-port: 7890\nmode: global\nlog-level: info\n\nproxies:\n")
-	if tlsPort > 0 {
-		// TLS 加密节点（推荐，抗 GFW 动态封锁；证书为服务端自签）
-		names = append(names, "RTP-Server-TLS")
-		fmt.Fprintf(&b, "  - name: \"RTP-Server-TLS\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    tls: true\n    skip-cert-verify: true\n    udp: true\n\n", host, tlsPort, user, pass)
-	}
+	b.WriteString("# rtp 代理网关 · Clash 配置（规则分流版，由服务端自动生成）\n")
+	b.WriteString("# 策略：国内直连 / 境外走代理，延迟显著低于全量代理\n")
+	b.WriteString("# TLS 节点（抗封锁）与明文节点均可用，AUTO 组会测速优选\n")
+	b.WriteString("mixed-port: 7890\n")
+	b.WriteString("mode: rule\n")
+	b.WriteString("log-level: warning\n")
+	b.WriteString("ipv6: false\n\n")
+
+	// DNS：fake-ip 模式，国内 DNS 优先，境外 DoH 兜底
+	b.WriteString("dns:\n")
+	b.WriteString("  enable: true\n")
+	b.WriteString("  ipv6: false\n")
+	b.WriteString("  enhanced-mode: fake-ip\n")
+	b.WriteString("  fake-ip-range: 198.18.0.1/16\n")
+	b.WriteString("  default-nameserver:\n    - 223.5.5.5\n    - 119.29.29.29\n")
+	b.WriteString("  nameserver:\n    - 223.5.5.5\n    - 119.29.29.29\n")
+	b.WriteString("  fallback:\n    - https://1.1.1.1/dns-query\n    - https://8.8.8.8/dns-query\n")
+	b.WriteString("  fallback-filter:\n    geoip: true\n    ipcidr:\n      - 240.0.0.0/4\n\n")
+
+	// 代理节点
+	var names []string
+	b.WriteString("proxies:\n")
 	if socksPort > 0 {
-		names = append(names, "RTP-Server-LAN")
-		fmt.Fprintf(&b, "  - name: \"RTP-Server-LAN\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    udp: true\n\n", host, socksPort, user, pass)
+		names = append(names, "RTP-LAN")
+		fmt.Fprintf(&b, "  - name: \"RTP-LAN\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    udp: true\n    skip-cert-verify: true\n\n", host, socksPort, user, pass)
 	}
 	if httpPort > 0 {
-		// HTTP 代理为免密直连，Clash 节点不带账密
-		names = append(names, "RTP-Server-HTTP")
-		fmt.Fprintf(&b, "  - name: \"RTP-Server-HTTP\"\n    type: http\n    server: %s\n    port: %d\n\n", host, httpPort)
+		names = append(names, "RTP-HTTP")
+		fmt.Fprintf(&b, "  - name: \"RTP-HTTP\"\n    type: http\n    server: %s\n    port: %d\n\n", host, httpPort)
+	}
+	if tlsPort > 0 {
+		names = append(names, "RTP-TLS")
+		fmt.Fprintf(&b, "  - name: \"RTP-TLS\"\n    type: socks5\n    server: %s\n    port: %d\n    username: \"%s\"\n    password: \"%s\"\n    tls: true\n    skip-cert-verify: true\n    udp: true\n\n", host, tlsPort, user, pass)
 	}
 	if len(names) == 0 {
 		return "# 代理网关未启用：请先在「代理」页开启并配置端口\n"
 	}
-	b.WriteString("proxy-groups:\n  - name: PROXY\n    type: select\n    proxies:\n")
+
+	// 策略组：AUTO 自动测速优选，PROXY 手动可切换
+	b.WriteString("proxy-groups:\n")
+	if len(names) > 1 {
+		b.WriteString("  - name: AUTO\n    type: url-test\n    proxies:\n")
+		for _, n := range names {
+			fmt.Fprintf(&b, "      - \"%s\"\n", n)
+		}
+		b.WriteString("    url: \"http://www.gstatic.com/generate_204\"\n    interval: 300\n    tolerance: 50\n\n")
+	}
+	b.WriteString("  - name: PROXY\n    type: select\n    proxies:\n      - \"AUTO\"\n")
 	for _, n := range names {
 		fmt.Fprintf(&b, "      - \"%s\"\n", n)
 	}
-	b.WriteString("\nrules:\n  - \"MATCH,PROXY\"\n")
+	b.WriteString("      - \"DIRECT\"\n\n")
+
+	// 分流规则
+	b.WriteString("rules:\n")
+	b.WriteString("  # 局域网与保留地址直连\n")
+	b.WriteString("  - \"DOMAIN-SUFFIX,local,DIRECT\"\n")
+	b.WriteString("  - \"IP-CIDR,127.0.0.0/8,DIRECT,no-resolve\"\n")
+	b.WriteString("  - \"IP-CIDR,10.0.0.0/8,DIRECT,no-resolve\"\n")
+	b.WriteString("  - \"IP-CIDR,172.16.0.0/12,DIRECT,no-resolve\"\n")
+	b.WriteString("  - \"IP-CIDR,192.168.0.0/16,DIRECT,no-resolve\"\n")
+	b.WriteString("  - \"IP-CIDR,100.64.0.0/10,DIRECT,no-resolve\"\n")
+	b.WriteString("  # 国内常用站点直连（绕远路反而更慢）\n")
+	b.WriteString("  - \"DOMAIN-SUFFIX,cn,DIRECT\"\n")
+	b.WriteString("  - \"DOMAIN-KEYWORD,-cn,DIRECT\"\n")
+	for _, d := range []string{
+		"baidu.com", "qq.com", "weixin.qq.com", "taobao.com", "tmall.com",
+		"jd.com", "alipay.com", "bilibili.com", "hdslb.com", "zhihu.com",
+		"weibo.com", "163.com", "csdn.net", "gitee.com", "aliyun.com",
+		"aliyuncs.com", "tencent.com", "mi.com", "huawei.com", "douyin.com",
+		"bytedance.com", "xiaohongshu.com",
+	} {
+		fmt.Fprintf(&b, "  - \"DOMAIN-SUFFIX,%s,DIRECT\"\n", d)
+	}
+	b.WriteString("  # 境外站点走代理\n")
+	for _, d := range []string{
+		"google.com", "googleapis.com", "gstatic.com", "youtube.com",
+		"ytimg.com", "googlevideo.com", "github.com", "githubusercontent.com",
+		"githubassets.com", "openai.com", "anthropic.com", "claude.ai",
+		"twitter.com", "x.com", "facebook.com", "instagram.com",
+		"telegram.org", "t.me", "wikipedia.org", "docker.com", "docker.io",
+		"npmjs.org", "pypi.org", "huggingface.co", "netflix.com", "spotify.com",
+	} {
+		fmt.Fprintf(&b, "  - \"DOMAIN-SUFFIX,%s,PROXY\"\n", d)
+	}
+	b.WriteString("  # 国内 IP 兜底直连，其余走代理\n")
+	b.WriteString("  - \"GEOIP,CN,DIRECT\"\n")
+	b.WriteString("  - \"MATCH,PROXY\"\n")
 	return b.String()
 }
 
